@@ -14,7 +14,13 @@ const handler = (req: Request, res: Response) => {
 
 // Allow requests from this endpoint.
 var corsOptions = {
-  origin: ["http://localhost:3000", "http://localhost:4000"],
+  origin: [
+    "http://localhost:3000",
+    "http://localhost:4000",
+    "http://login.etiennethompson.com",
+    "http://admin.etiennethompson.com",
+    "http://inventory.etiennethompson.com",
+  ],
 };
 app.use(cors(corsOptions));
 app.use(express.json());
