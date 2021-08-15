@@ -17,6 +17,12 @@ export const connectToDatabase = (): Client => {
   return client;
 };
 
+/**
+ * TODO: Perform the query, retrying on failed database connections.
+ * @param client the database to perform the query on.
+ * @param query the query to perform.
+ * @returns the results of the query, undefined if no results, and null if no response.
+ */
 export const performQuery = async (client: Client, query: string) => {
   return await makeSingleQuery(client, query);
 };
@@ -25,7 +31,7 @@ export const performQuery = async (client: Client, query: string) => {
  * Makes a single query and returns the results if there were any.
  * @param client the database to perform the query on.
  * @param query the query to perform.
- * @returns The results of the query, undefined if no results, and null if no response.
+ * @returns the results of the query, undefined if no results, and null if no response.
  */
 const makeSingleQuery = async (
   client: Client,
