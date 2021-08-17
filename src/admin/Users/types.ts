@@ -1,6 +1,6 @@
-export interface CreateUserRequest {
+export interface CreateRequestUsers {
   username: string;
-  hashedPassword: string;
+  password: string;
 }
 
 export interface UpdateUserRequest {
