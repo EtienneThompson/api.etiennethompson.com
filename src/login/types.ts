@@ -16,3 +16,8 @@ export type ApplicationEntry = {
   applicationname: string;
   redirecturl: string;
 };
+
+export type UserAdminStatus = {
+  isuser: boolean;
+  isadmin: boolean;
+};
