@@ -11,11 +11,11 @@ export interface CreateRequestUsers {
 }
 
 export interface UpdateUserRequest {
-  userId: string;
+  userid: string;
   username: string;
   hashedPassword: string;
 }
 
 export interface DeleteUserRequest {
-  userId: string;
+  userid: string;
 }

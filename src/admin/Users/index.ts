@@ -57,7 +57,8 @@ export const updateUser = async (req: Request, res: Response) => {
   const client = connectToDatabase();
 
   console.log(reqBody.username);
-  const updateUserQuery = `update users set username = '${reqBody.username}' where userid = '${reqBody.userId}'`;
+  console.log(reqBody.userid);
+  const updateUserQuery = `UPDATE users SET username = '${reqBody.username}' WHERE userid = '${reqBody.userid}'`;
   const { code, rows } = await performQuery(client, updateUserQuery);
   console.log(code);
 
