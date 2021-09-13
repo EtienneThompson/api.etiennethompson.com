@@ -10,23 +10,23 @@ export const loginHandler = async (req: Request, res: Response) => {
   // Verify that the user exists and get the user's client id.
   let clientId: string = "";
   const userQuery = `SELECT * FROM users WHERE username='${requestBody.username}' AND password='${requestBody.hashedPassword}'`;
-  const userRows = await performQuery(client, userQuery);
-  if (userRows) {
-    const entry = userRows[0] as UserEntry;
+  let { code, rows } = await performQuery(client, userQuery);
+  if (code === 200 && rows) {
+    const entry = rows[0] as UserEntry;
     clientId = entry.clientid;
   } else {
     // No results, return an error message.
     client.end();
     res.status(404);
-    res.send({ message: "That user doesn't exist/" });
+    res.send({ message: "That user doesn't exist" });
   }
 
   // Verify the application exists and get the redirect url for that application.
   let redirectUrl: string = "";
   const applicationQuery = `SELECT * FROM applications WHERE applicationid='${requestBody.appid}'`;
-  const applicationRows = await performQuery(client, applicationQuery);
-  if (applicationRows) {
-    const entry = applicationRows[0] as ApplicationEntry;
+  ({ code, rows } = await performQuery(client, applicationQuery));
+  if (code === 200 && rows) {
+    const entry = rows[0] as ApplicationEntry;
     redirectUrl = entry.redirecturl;
   } else {
     // No results, return an error message.
