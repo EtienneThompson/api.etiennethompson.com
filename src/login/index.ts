@@ -5,47 +5,41 @@ import {
   ApplicationEntry,
   UserAdminStatus,
 } from "./types";
-import { connectToDatabase } from "../utils/database";
+import { connectToDatabase, performQuery } from "../utils/database";
 
 export const loginHandler = async (req: Request, res: Response) => {
   var requestBody = req.body as LoginRequest;
 
   const client = connectToDatabase();
 
-  const user = await client.query(
-    `SELECT * FROM users WHERE username='${requestBody.username}' AND password='${requestBody.hashedPassword}'`
-  );
+  // Verify that the user exists and get the user's client id.
   let clientId: string = "";
   let userId: string = "";
-  if (user) {
-    if (user.rows.length === 0) {
-      client.end();
-      res.status(404);
-      res.send({ message: "That user doesn't exist." });
-      return;
-    } else {
-      const entry = user.rows[0] as UserEntry;
-      clientId = entry.clientid;
-      userId = entry.userid;
-    }
+  const userQuery = `SELECT * FROM users WHERE username='${requestBody.username}' AND password='${requestBody.hashedPassword}'`;
+  let { code, rows } = await performQuery(client, userQuery);
+  if (code === 200 && rows) {
+    const entry = rows[0] as UserEntry;
+    clientId = entry.clientid;
+    userId = entry.userid;
+  } else {
+    // No results, return an error message.
+    client.end();
+    res.status(404);
+    res.send({ message: "That user doesn't exist" });
   }
 
-  const application = await client.query(
-    `SELECT * FROM applications WHERE applicationid='${requestBody.appid}'`
-  );
+  // Verify the application exists and get the redirect url for that application.
   let redirectUrl: string = "";
-  let applicationId: string = "";
-  if (application) {
-    if (application.rows.length === 0) {
-      client.end();
-      res.status(404);
-      res.send({ message: "That application doesn't exist." });
-      return;
-    } else {
-      const appEntry = application.rows[0] as ApplicationEntry;
-      redirectUrl = appEntry.redirecturl;
-      applicationId = appEntry.applicationid;
-    }
+  const applicationQuery = `SELECT * FROM applications WHERE applicationid='${requestBody.appid}'`;
+  ({ code, rows } = await performQuery(client, applicationQuery));
+  if (code === 200 && rows) {
+    const entry = rows[0] as ApplicationEntry;
+    redirectUrl = entry.redirecturl;
+  } else {
+    // No results, return an error message.
+    client.end();
+    res.status(404);
+    res.send({ message: "That application doesn't exist." });
   }
 
   // Get the user, admin status for the given user for the given application.
