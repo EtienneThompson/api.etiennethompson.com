@@ -26,7 +26,6 @@ export const getUsers = async (req: Request, res: Response) => {
 
 export const createUser = async (req: Request, res: Response) => {
   // insert into users (username, hashedPassword) values ('${username}', '${hashedPassword}');
-  console.log("creating a user");
   var reqBody = req.body as CreateRequestUsers[];
 
   const client = connectToDatabase();
@@ -56,7 +55,6 @@ export const createUser = async (req: Request, res: Response) => {
 
 export const updateUser = async (req: Request, res: Response) => {
   // update users set username = '${username}', hashedPassword = '${hashedPassword}' where userId='${userId}';
-  console.log("updating a user");
   var reqBody = req.body as UpdateUserRequest;
   const client = connectToDatabase();
 
@@ -75,7 +73,6 @@ export const updateUser = async (req: Request, res: Response) => {
 
 export const deleteUser = async (req: Request, res: Response) => {
   // delete from users where userId = '${userId}';
-  console.log("deleting a user");
   var reqBody = req.body as DeleteUserRequest;
   const client = connectToDatabase();
 
