@@ -1,7 +1,12 @@
 import { Request, Response } from "express";
 import { v4 as uuidv4 } from "uuid";
 import { connectToDatabase, performQuery } from "../../utils/database";
-import { Users, CreateRequestUsers, UpdateUserRequest } from "./types";
+import {
+  Users,
+  CreateRequestUsers,
+  UpdateUserRequest,
+  DeleteUserRequest,
+} from "./types";
 
 export const getUsers = async (req: Request, res: Response) => {
   // select username, hashedPassword from users;
@@ -9,8 +14,8 @@ export const getUsers = async (req: Request, res: Response) => {
 
   const getUserQuery = "select * from users;";
   const { code, rows } = await performQuery(client, getUserQuery);
+  client.end();
   if (code === 200 && !rows) {
-    client.end();
     res.status(400);
     res.send({ message: "no users were found." });
   }
@@ -40,7 +45,6 @@ export const createUser = async (req: Request, res: Response) => {
   });
 
   client.end();
-
   if (createdUsers) {
     res.status(200);
     res.send({ createUsers: createdUsers });
@@ -56,14 +60,10 @@ export const updateUser = async (req: Request, res: Response) => {
   var reqBody = req.body as UpdateUserRequest;
   const client = connectToDatabase();
 
-  console.log(reqBody.username);
-  console.log(reqBody.userid);
   const updateUserQuery = `UPDATE users SET username = '${reqBody.username}' WHERE userid = '${reqBody.userid}'`;
   const { code, rows } = await performQuery(client, updateUserQuery);
-  console.log(code);
 
   client.end();
-
   if (code === 200) {
     res.status(200);
     res.send();
@@ -73,8 +73,21 @@ export const updateUser = async (req: Request, res: Response) => {
   }
 };
 
-export const deleteUser = (req: Request, res: Response) => {
+export const deleteUser = async (req: Request, res: Response) => {
   // delete from users where userId = '${userId}';
   console.log("deleting a user");
-  res.send("deleting a user");
+  var reqBody = req.body as DeleteUserRequest;
+  const client = connectToDatabase();
+
+  const deleteUserQuery = `DELETE FROM users WHERE userid='${reqBody.userid}'`;
+  const { code, rows } = await performQuery(client, deleteUserQuery);
+  client.end();
+
+  if (code === 200) {
+    res.status(200);
+    res.send();
+  } else {
+    res.status(404);
+    res.send();
+  }
 };
