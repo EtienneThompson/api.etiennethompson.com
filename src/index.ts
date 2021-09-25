@@ -1,4 +1,5 @@
 import express, { Request, Response } from "express";
+import { validateUser } from "./middleware/validateUser";
 import { loginHandler } from "./login";
 import { getUsers, createUser, updateUser, deleteUser } from "./admin/Users";
 import {
@@ -36,6 +37,7 @@ var corsOptions = {
 };
 app.use(cors(corsOptions));
 app.use(express.json());
+app.use(validateUser);
 
 // Routes allowed for the api.
 app.get("/", handler);

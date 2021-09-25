@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { v4 as uuidv4 } from "uuid";
-import { connectToDatabase, performQuery } from "../../utils/database";
+import { performQuery } from "../../utils/database";
 import {
   Users,
   CreateRequestUsers,
@@ -10,11 +10,8 @@ import {
 
 export const getUsers = async (req: Request, res: Response) => {
   // select username, hashedPassword from users;
-  const client = connectToDatabase();
-
   const getUserQuery = "select * from users;";
-  const { code, rows } = await performQuery(client, getUserQuery);
-  client.end();
+  const { code, rows } = await performQuery(getUserQuery);
   if (code === 200 && !rows) {
     res.status(400);
     res.send({ message: "no users were found." });
@@ -26,24 +23,20 @@ export const getUsers = async (req: Request, res: Response) => {
 
 export const createUser = async (req: Request, res: Response) => {
   // insert into users (username, hashedPassword) values ('${username}', '${hashedPassword}');
-  var reqBody = req.body as CreateRequestUsers[];
-
-  const client = connectToDatabase();
-
+  var reqBody = req.body.newUsers as CreateRequestUsers[];
   let createdUsers = [] as Users[];
 
-  reqBody.forEach(async (newUser) => {
+  await reqBody.forEach(async (newUser) => {
     // Generate a new user and client Id here too.
     const newUserId = uuidv4();
     const newClientId = uuidv4();
-    const createUserQuery = `insert into users (userid, username, password, clientId) values ('${newUserId}', '${newUser.username}', '${newUser.password}', '${newClientId}');`;
-    const { code, rows } = await performQuery(client, createUserQuery);
+    const createUserQuery = `INSERT INTO users (userid, username, password, clientId) VALUES ('${newUserId}', '${newUser.username}', '${newUser.password}', '${newClientId}');`;
+    const { code, rows } = await performQuery(createUserQuery);
     if (code === 200) {
       createdUsers.push(rows[0]);
     }
   });
 
-  client.end();
   if (createdUsers) {
     res.status(200);
     res.send({ createUsers: createdUsers });
@@ -55,13 +48,11 @@ export const createUser = async (req: Request, res: Response) => {
 
 export const updateUser = async (req: Request, res: Response) => {
   // update users set username = '${username}', hashedPassword = '${hashedPassword}' where userId='${userId}';
-  var reqBody = req.body as UpdateUserRequest;
-  const client = connectToDatabase();
+  var reqBody = req.body.user as UpdateUserRequest;
 
   const updateUserQuery = `UPDATE users SET username = '${reqBody.username}' WHERE userid = '${reqBody.userid}'`;
-  const { code, rows } = await performQuery(client, updateUserQuery);
+  const { code, rows } = await performQuery(updateUserQuery);
 
-  client.end();
   if (code === 200) {
     res.status(200);
     res.send();
@@ -74,11 +65,9 @@ export const updateUser = async (req: Request, res: Response) => {
 export const deleteUser = async (req: Request, res: Response) => {
   // delete from users where userId = '${userId}';
   var reqBody = req.body as DeleteUserRequest;
-  const client = connectToDatabase();
 
   const deleteUserQuery = `DELETE FROM users WHERE userid='${reqBody.userid}'`;
-  const { code, rows } = await performQuery(client, deleteUserQuery);
-  client.end();
+  const { code, rows } = await performQuery(deleteUserQuery);
 
   if (code === 200) {
     res.status(200);
