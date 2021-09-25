@@ -48,9 +48,9 @@ export const createUser = async (req: Request, res: Response) => {
 
 export const updateUser = async (req: Request, res: Response) => {
   // update users set username = '${username}', hashedPassword = '${hashedPassword}' where userId='${userId}';
-  var reqBody = req.body as UpdateUserRequest;
+  var reqBody = req.body.user as UpdateUserRequest;
 
-  const updateUserQuery = `UPDATE users SET username = '${reqBody.user.username}' WHERE userid = '${reqBody.user.userid}'`;
+  const updateUserQuery = `UPDATE users SET username = '${reqBody.username}' WHERE userid = '${reqBody.userid}'`;
   const { code, rows } = await performQuery(updateUserQuery);
 
   if (code === 200) {
