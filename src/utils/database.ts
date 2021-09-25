@@ -2,10 +2,12 @@ import { Client } from "pg";
 import { QueryResponse } from "../types";
 
 /**
- * Connect to the database and return a client object for further interactions.
- * @returns Client object for interacting with the database.
+ * TODO: Perform the query, retrying on failed database connections.
+ * @param client the database to perform the query on.
+ * @param query the query to perform.
+ * @returns the results of the query, undefined if no results, and null if no response.
  */
-export const connectToDatabase = (): Client => {
+export const performQuery = async (query: string): Promise<QueryResponse> => {
   const client = new Client({
     connectionString: process.env.DATABASE_URL,
     ssl: {
@@ -13,22 +15,11 @@ export const connectToDatabase = (): Client => {
     },
   });
 
-  client.connect();
+  await client.connect();
+  const { code, rows } = await makeSingleQuery(client, query);
+  await client.end();
 
-  return client;
-};
-
-/**
- * TODO: Perform the query, retrying on failed database connections.
- * @param client the database to perform the query on.
- * @param query the query to perform.
- * @returns the results of the query, undefined if no results, and null if no response.
- */
-export const performQuery = async (
-  client: Client,
-  query: string
-): Promise<QueryResponse> => {
-  return await makeSingleQuery(client, query);
+  return { code, rows };
 };
 
 /**

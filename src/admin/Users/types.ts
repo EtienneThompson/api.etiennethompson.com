@@ -11,9 +11,7 @@ export interface CreateRequestUsers {
 }
 
 export interface UpdateUserRequest {
-  userid: string;
-  username: string;
-  hashedPassword: string;
+  user: Users;
 }
 
 export interface DeleteUserRequest {
