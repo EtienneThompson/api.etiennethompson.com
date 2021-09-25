@@ -1,8 +1,18 @@
 import { Request, Response } from "express";
+import { performQuery } from "../../utils/database";
 
-export const getApplications = (req: Request, res: Response): void => {
-  console.log("admin get endpoint");
-  res.send("admin get endpoint");
+export const getApplications = async (req: Request, res: Response) => {
+  // select applicationname, redirecturl from applications;
+  const getApplicationsQuery =
+    "select applicationname, redirecturl from applications;";
+  const { code, rows } = await performQuery(getApplicationsQuery);
+  if (code === 200 && !rows) {
+    res.status(400);
+    res.send({ message: "No applications were found." });
+  }
+
+  res.status(200);
+  res.send({ applications: rows });
 };
 
 export const createApplication = (req: Request, res: Response) => {
