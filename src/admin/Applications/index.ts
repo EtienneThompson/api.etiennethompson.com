@@ -40,9 +40,20 @@ export const createApplication = async (req: Request, res: Response) => {
   }
 };
 
-export const updateApplication = (req: Request, res: Response) => {
-  console.log("updating application");
-  res.send("updating application");
+export const updateApplication = async (req: Request, res: Response) => {
+  // update applications set applicationname = '${appicationname}', redirecturl = '${redirecturl}' where applicationid='${applicationid}';
+  var reqBody = req.body.application as Applications;
+
+  const updateApplicationQuery = `UPDATE applications SET applicationname = '${reqBody.applicationname}', redirecturl = '${reqBody.redirecturl}' WHERE applicationid='${reqBody.applicationid}';`;
+  const { code, rows } = await performQuery(updateApplicationQuery);
+
+  if (code === 200) {
+    res.status(200);
+    res.send();
+  } else {
+    res.status(404);
+    res.send({ message: "An application for that id does not exist." });
+  }
 };
 
 export const deleteApplication = (req: Request, res: Response) => {

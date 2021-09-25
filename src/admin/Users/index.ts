@@ -10,7 +10,7 @@ import {
 
 export const getUsers = async (req: Request, res: Response) => {
   // select username, hashedPassword from users;
-  const getUserQuery = "select * from users;";
+  const getUserQuery = "SELECT * FROM users;";
   const { code, rows } = await performQuery(getUserQuery);
   if (code === 200 && !rows) {
     res.status(400);
@@ -50,7 +50,7 @@ export const updateUser = async (req: Request, res: Response) => {
   // update users set username = '${username}', hashedPassword = '${hashedPassword}' where userId='${userId}';
   var reqBody = req.body.user as UpdateUserRequest;
 
-  const updateUserQuery = `UPDATE users SET username = '${reqBody.username}' WHERE userid = '${reqBody.userid}'`;
+  const updateUserQuery = `UPDATE users SET username = '${reqBody.username}' WHERE userid = '${reqBody.userid}';`;
   const { code, rows } = await performQuery(updateUserQuery);
 
   if (code === 200) {
