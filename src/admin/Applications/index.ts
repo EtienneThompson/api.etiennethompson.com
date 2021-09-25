@@ -56,7 +56,17 @@ export const updateApplication = async (req: Request, res: Response) => {
   }
 };
 
-export const deleteApplication = (req: Request, res: Response) => {
-  console.log("deleting application");
-  res.send("deleting application");
+export const deleteApplication = async (req: Request, res: Response) => {
+  var reqBody = req.body as Applications;
+
+  const deleteApplicationQuery = `DELETE FROM applications WHERE applicationid='${reqBody.applicationid}';`;
+  const { code, rows } = await performQuery(deleteApplicationQuery);
+
+  if (code === 200) {
+    res.status(200);
+    res.send();
+  } else {
+    res.status(404);
+    res.send({ message: "An application for that id does not exist." });
+  }
 };
