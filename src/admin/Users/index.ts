@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { v4 as uuidv4 } from "uuid";
 import { performQuery } from "../../utils/database";
+import { createExpiration } from "../../utils/date";
 import {
   Users,
   CreateRequestUsers,
@@ -30,7 +31,8 @@ export const createUser = async (req: Request, res: Response) => {
     // Generate a new user and client Id here too.
     const newUserId = uuidv4();
     const newClientId = uuidv4();
-    const createUserQuery = `INSERT INTO users (userid, username, password, clientId) VALUES ('${newUserId}', '${newUser.username}', '${newUser.password}', '${newClientId}');`;
+    let expiration = createExpiration();
+    const createUserQuery = `INSERT INTO users (userid, username, password, clientId, session_expiration) VALUES ('${newUserId}', '${newUser.username}', '${newUser.password}', '${newClientId}', '${expiration}');`;
     const { code, rows } = await performQuery(createUserQuery);
     if (code === 200) {
       createdUsers.push(rows[0]);

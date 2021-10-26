@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from "uuid";
 import { LoginRequest, ApplicationEntry, UserAdminStatus } from "./types";
 import { UserEntry } from "../types";
 import { performQuery } from "../utils/database";
+import { createExpiration } from "../utils/date";
 
 export const loginHandler = async (req: Request, res: Response) => {
   var requestBody = req.body as LoginRequest;
@@ -53,7 +54,8 @@ export const loginHandler = async (req: Request, res: Response) => {
 
   // Generate a new clientId for the user.
   const newClientId = uuidv4();
-  const updateClientIdQuery = `UPDATE users SET clientid = '${newClientId}' WHERE userid='${userId}'`;
+  const expiration = createExpiration();
+  const updateClientIdQuery = `UPDATE users SET clientid = '${newClientId}', session_expiration = '${expiration}' WHERE userid='${userId}'`;
   ({ code, rows } = await performQuery(updateClientIdQuery));
   if (code !== 200) {
     res.status(500);
