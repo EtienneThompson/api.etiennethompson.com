@@ -11,7 +11,7 @@ export const getApplicationUsers = async (req: Request, res: Response) => {
   }
 
   res.status(200);
-  res.send({ user: rows });
+  res.send({ applicationUsers: rows });
 };
 
 export const createApplicationUser = async (req: Request, res: Response) => {
@@ -38,7 +38,7 @@ export const createApplicationUser = async (req: Request, res: Response) => {
 export const updateApplicationUser = async (req: Request, res: Response) => {
   var reqBody = req.body.applicationuser as ApplicationUser;
 
-  const updateApplicationUserQuery = `UPDATE applicationusers SET isuser = '${reqBody.isuser}', isadmin = '${reqBody.isadmin}' WHERE userid='${reqBody.userid}' AND applicationid='${reqBody.applicationid}');`;
+  const updateApplicationUserQuery = `UPDATE applicationusers SET isuser = '${reqBody.isuser}', isadmin = '${reqBody.isadmin}' WHERE userid='${reqBody.userid}' AND applicationid='${reqBody.applicationid}';`;
   const { code, rows } = await performQuery(updateApplicationUserQuery);
 
   res.status(code);
@@ -46,7 +46,7 @@ export const updateApplicationUser = async (req: Request, res: Response) => {
 };
 
 export const deleteApplicationUser = async (req: Request, res: Response) => {
-  var reqBody = req.body as ApplicationUser;
+  var reqBody = req.body.applicationuser as ApplicationUser;
 
   const deleteUserQuery = `DELETE FROM applicationusers WHERE userid='${reqBody.userid}' AND applicationid='${reqBody.applicationid}';`;
   const { code, rows } = await performQuery(deleteUserQuery);
