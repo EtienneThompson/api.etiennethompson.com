@@ -1,4 +1,5 @@
 import e, { Request, Response } from "express";
+import { v4 as uuidv4 } from "uuid";
 import { LoginRequest, ApplicationEntry, UserAdminStatus } from "./types";
 import { UserEntry } from "../types";
 import { performQuery } from "../utils/database";
@@ -36,25 +37,32 @@ export const loginHandler = async (req: Request, res: Response) => {
 
   // Get the user, admin status for the given user for the given application.
   const applicationUsersQuery = `SELECT isuser, isadmin FROM applicationusers WHERE userid='${userId}'`;
-  const applicationUsers = await performQuery(applicationUsersQuery);
+  ({ code, rows } = await performQuery(applicationUsersQuery));
   let isUser: boolean = false;
   let isAdmin: boolean = false;
-  if (applicationUsers) {
-    if (applicationUsers.rows.length === 0) {
-      res.status(404);
-      res.send({
-        message: "That user is not a member of the given application.",
-      });
-    } else {
-      const appUsers = applicationUsers.rows[0] as UserAdminStatus;
-      isUser = appUsers.isuser;
-      isAdmin = appUsers.isadmin;
-    }
+  if (code !== 200) {
+    res.status(404);
+    res.send({
+      message: "That user is not a member of the given application.",
+    });
+  } else {
+    const appUsers = rows[0] as UserAdminStatus;
+    isUser = appUsers.isuser;
+    isAdmin = appUsers.isadmin;
+  }
+
+  // Generate a new clientId for the user.
+  const newClientId = uuidv4();
+  const updateClientIdQuery = `UPDATE users SET clientid = '${newClientId}' WHERE userid='${userId}'`;
+  ({ code, rows } = await performQuery(updateClientIdQuery));
+  if (code !== 200) {
+    res.status(500);
+    res.send({ message: "There was an unexpected error. " });
   }
 
   res.status(200);
   res.send({
-    clientId: clientId,
+    clientId: newClientId,
     redirectUrl: redirectUrl,
     isUser: isUser,
     isAdmin: isAdmin,
