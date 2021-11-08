@@ -13,4 +13,5 @@ export type UserEntry = {
   username: string;
   password: string;
   clientid: string;
+  session_expiration: string;
 };
