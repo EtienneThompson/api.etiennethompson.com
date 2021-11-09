@@ -28,8 +28,19 @@ export const loginHandler = async (req: Request, res: Response) => {
   const applicationQuery = `SELECT * FROM applications WHERE applicationid='${requestBody.appid}'`;
   ({ code, rows } = await performQuery(applicationQuery));
   if (code === 200 && rows) {
-    const entry = rows[0] as ApplicationEntry;
-    redirectUrl = entry.redirecturl;
+    rows = rows as ApplicationEntry[];
+    for (let i = 0; i < rows.length; i++) {
+      const entry = rows[i] as ApplicationEntry;
+      if (entry.redirecturl.indexOf(requestBody.redirectBase)) {
+        redirectUrl = entry.redirecturl;
+        break;
+      }
+    }
+    if (redirectUrl === "") {
+      res.status(404).send({
+        message: "Could not find matching redirect url for given base.",
+      });
+    }
   } else {
     // No results, return an error message.
     res.status(404);

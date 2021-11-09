@@ -2,6 +2,7 @@ export type LoginRequest = {
   username: string;
   hashedPassword: string;
   appid: string;
+  redirectBase: string;
 };
 
 export type ApplicationEntry = {
