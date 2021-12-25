@@ -34,7 +34,6 @@ export const createUser = async (req: Request, res: Response) => {
   const { code, rows } = await performQuery(createUserQuery);
 
   if (code === 200) {
-    console.log(rows);
     res.status(200);
     res.send({
       createdUser: {

@@ -5,7 +5,6 @@ import { getCurrentTimeField } from "../utils/date";
 
 export const validateUser = async (req: Request, res: Response, next: any) => {
   if (req.path === "/login") {
-    console.log("skipping");
     next();
     return;
   }
