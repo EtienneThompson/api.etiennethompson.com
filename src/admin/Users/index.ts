@@ -24,24 +24,25 @@ export const getUsers = async (req: Request, res: Response) => {
 
 export const createUser = async (req: Request, res: Response) => {
   // insert into users (username, hashedPassword) values ('${username}', '${hashedPassword}');
-  var reqBody = req.body.newUsers as CreateRequestUsers[];
-  let createdUsers = [] as Users[];
+  var newUser = req.body.newUser as CreateRequestUsers;
 
-  await reqBody.forEach(async (newUser) => {
-    // Generate a new user and client Id here too.
-    const newUserId = uuidv4();
-    const newClientId = uuidv4();
-    let expiration = createExpiration();
-    const createUserQuery = `INSERT INTO users (userid, username, password, clientId, session_expiration) VALUES ('${newUserId}', '${newUser.username}', '${newUser.password}', '${newClientId}', '${expiration}');`;
-    const { code, rows } = await performQuery(createUserQuery);
-    if (code === 200) {
-      createdUsers.push(rows[0]);
-    }
-  });
+  // Generate a new user and client Id here too.
+  const newUserId = uuidv4();
+  const newClientId = uuidv4();
+  let expiration = createExpiration();
+  const createUserQuery = `INSERT INTO users (userid, username, password, clientId, session_expiration) VALUES ('${newUserId}', '${newUser.username}', '${newUser.password}', '${newClientId}', '${expiration}');`;
+  const { code, rows } = await performQuery(createUserQuery);
 
-  if (createdUsers) {
+  if (code === 200) {
+    console.log(rows);
     res.status(200);
-    res.send({ createUsers: createdUsers });
+    res.send({
+      createdUser: {
+        username: newUser.username,
+        userid: newUserId,
+        clientid: newClientId,
+      },
+    });
   } else {
     res.status(500);
     res.send();
