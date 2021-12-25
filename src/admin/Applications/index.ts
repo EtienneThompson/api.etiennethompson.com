@@ -18,22 +18,22 @@ export const getApplications = async (req: Request, res: Response) => {
 
 export const createApplication = async (req: Request, res: Response) => {
   // insert into applications (applicationid, applicationname, redirecturl) values (...);
-  var reqBody = req.body.newApplications as CreateApplicationsRequest[];
-  let createdApplications = [] as Applications[];
+  var newApplication = req.body.newApplication as CreateApplicationsRequest;
 
-  await reqBody.forEach(async (newApplication) => {
-    // Generate a new applicationid.
-    const newApplicationId = uuidv4();
-    const createApplicationQuery = `INSERT INTO applications (applicationid, applicationname, redirecturl) VALUES ('${newApplicationId}', '${newApplication.applicationname}', '${newApplication.redirecturl}')`;
-    const { code, rows } = await performQuery(createApplicationQuery);
-    if (code === 200) {
-      createdApplications.push(rows[0]);
-    }
-  });
+  // Generate a new applicationid.
+  const newApplicationId = uuidv4();
+  const createApplicationQuery = `INSERT INTO applications (applicationid, applicationname, redirecturl) VALUES ('${newApplicationId}', '${newApplication.applicationname}', '${newApplication.redirecturl}')`;
+  const { code, rows } = await performQuery(createApplicationQuery);
 
-  if (createdApplications) {
+  if (code === 200) {
     res.status(200);
-    res.send({ createdApplications: createdApplications });
+    res.send({
+      createdApplication: {
+        applicationid: newApplicationId,
+        applicationname: newApplication.applicationname,
+        redirecturl: newApplication.redirecturl,
+      },
+    });
   } else {
     res.status(500);
     res.send({ message: "No applications were created" });
