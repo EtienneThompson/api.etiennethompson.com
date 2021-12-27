@@ -15,20 +15,22 @@ export const getApplicationUsers = async (req: Request, res: Response) => {
 };
 
 export const createApplicationUser = async (req: Request, res: Response) => {
-  var reqBody = req.body.newApplicationUsers as ApplicationUser[];
-  var createdApplicationUsers = [] as ApplicationUser[];
+  var newApplicationUser = req.body.newApplicationUser as ApplicationUser;
+  console.log(newApplicationUser);
 
-  await reqBody.forEach(async (newApplicationUser) => {
-    const createApplicationUserQuery = `INSERT INTO applicationusers (userid, applicationid, isuser, isadmin) VALUES ('${newApplicationUser.userid}', '${newApplicationUser.applicationid}', '${newApplicationUser.isuser}', '${newApplicationUser.isadmin}');`;
-    const { code, rows } = await performQuery(createApplicationUserQuery);
-    if (code === 200) {
-      createdApplicationUsers.push(rows[0]);
-    }
-  });
+  const createApplicationUserQuery = `INSERT INTO applicationusers (userid, applicationid, isuser, isadmin) VALUES ('${newApplicationUser.userid}', '${newApplicationUser.applicationid}', '${newApplicationUser.isuser}', '${newApplicationUser.isadmin}');`;
+  const { code, rows } = await performQuery(createApplicationUserQuery);
 
-  if (createdApplicationUsers) {
+  if (code === 200) {
     res.status(200);
-    res.send({ createdApplicationUsers: createdApplicationUsers });
+    res.send({
+      createdApplicationUser: {
+        userid: newApplicationUser.userid,
+        applicationid: newApplicationUser.applicationid,
+        isuser: newApplicationUser.isuser,
+        isadmin: newApplicationUser.isadmin,
+      },
+    });
   } else {
     res.status(500);
     res.send();
