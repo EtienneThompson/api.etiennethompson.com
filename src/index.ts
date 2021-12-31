@@ -1,19 +1,10 @@
 import express, { Request, Response } from "express";
 import { validateUser } from "./middleware/validateUser";
 import { loginHandler } from "./login";
-import { getUsers, createUser, updateUser, deleteUser } from "./admin/Users";
-import {
-  getApplications,
-  createApplication,
-  updateApplication,
-  deleteApplication,
-} from "./admin/Applications";
-import {
-  getApplicationUsers,
-  createApplicationUser,
-  updateApplicationUser,
-  deleteApplicationUser,
-} from "./admin/ApplicationUsers";
+import * as users from "./admin/Users";
+import * as applications from "./admin/Applications";
+import * as applicationUsers from "./admin/ApplicationUsers";
+import * as inventory from "./inventory";
 
 require("dotenv").config();
 const cors = require("cors");
@@ -46,22 +37,42 @@ app.get("/", handler);
 app.post("/login", loginHandler);
 
 // Admin User routes.
-app.get("/admin/users", getUsers);
-app.post("/admin/users/create", createUser);
-app.put("/admin/users/update", updateUser);
-app.delete("/admin/users/delete", deleteUser);
+app.get("/admin/users", users.getUsers);
+app.post("/admin/users/create", users.createUser);
+app.put("/admin/users/update", users.updateUser);
+app.delete("/admin/users/delete", users.deleteUser);
 
 // Admin Applications routes.
-app.get("/admin/applications", getApplications);
-app.post("/admin/applications/create", createApplication);
-app.put("/admin/applications/update", updateApplication);
-app.delete("/admin/applications/delete", deleteApplication);
+app.get("/admin/applications", applications.getApplications);
+app.post("/admin/applications/create", applications.createApplication);
+app.put("/admin/applications/update", applications.updateApplication);
+app.delete("/admin/applications/delete", applications.deleteApplication);
 
 // Admin ApplicationUsers routes.
-app.get("/admin/applicationusers", getApplicationUsers);
-app.post("/admin/applicationusers/create", createApplicationUser);
-app.put("/admin/applicationusers/update", updateApplicationUser);
-app.delete("/admin/applicationusers/delete", deleteApplicationUser);
+app.get("/admin/applicationusers", applicationUsers.getApplicationUsers);
+app.post(
+  "/admin/applicationusers/create",
+  applicationUsers.createApplicationUser
+);
+app.put(
+  "/admin/applicationusers/update",
+  applicationUsers.updateApplicationUser
+);
+app.delete(
+  "/admin/applicationusers/delete",
+  applicationUsers.deleteApplicationUser
+);
+
+// Inventory routes.
+app.get("/inventory/folder", inventory.getFolder);
+app.post("/inventory/folder/create", inventory.createFolder);
+app.put("/inventory/folder/update", inventory.updateFolder);
+app.delete("/inventory/folder/delete", inventory.deleteFolder);
+
+app.get("/inventory/item", inventory.getItem);
+app.post("/inventory/item/create", inventory.createItem);
+app.put("/inventory/item/update", inventory.updateItem);
+app.delete("/inventory/item/delete", inventory.deleteItem);
 
 app.listen(port, () => {
   return console.log(`Server is listening on port ${port}`);
