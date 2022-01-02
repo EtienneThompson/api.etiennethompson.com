@@ -16,7 +16,6 @@ export const getApplicationUsers = async (req: Request, res: Response) => {
 
 export const createApplicationUser = async (req: Request, res: Response) => {
   var newApplicationUser = req.body.newApplicationUser as ApplicationUser;
-  console.log(newApplicationUser);
 
   const createApplicationUserQuery = `INSERT INTO applicationusers (userid, applicationid, isuser, isadmin) VALUES ('${newApplicationUser.userid}', '${newApplicationUser.applicationid}', '${newApplicationUser.isuser}', '${newApplicationUser.isadmin}');`;
   const { code, rows } = await performQuery(createApplicationUserQuery);
