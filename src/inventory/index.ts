@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { v4 as uuidv4 } from "uuid";
 import { performQuery } from "../utils/database";
 import { getCurrentTimeField } from "../utils/date";
-import { CreateFolderRequest } from "./types";
+import { CreateRequest } from "./types";
 
 const getUserId = async (clientid: string): Promise<string> => {
   const getUserIdQuery = `SELECT userid FROM users WHERE clientid='${clientid}'`;
@@ -65,8 +65,8 @@ export const getItem = async (req: Request, res: Response) => {
 };
 
 export const createFolder = async (req: Request, res: Response) => {
-  // insert into folders (folderid, name, description, owner, picture, parent_folder, created, updated) VALES (...);
-  const newFolder = req.body.newElement as CreateFolderRequest;
+  // insert into folders (folderid, name, description, owner, picture, parent_folder, created, updated) VALUES (...);
+  const newFolder = req.body.newElement as CreateRequest;
   const clientid = req.body.clientid;
 
   let userid = await getUserId(clientid);
@@ -78,7 +78,14 @@ export const createFolder = async (req: Request, res: Response) => {
 
   if (code === 200) {
     res.status(200);
-    res.send({ message: "Folder created successfully." });
+    res.send({
+      createdElement: {
+        id: newFolderId,
+        name: newFolder.name,
+        picture: newFolder.picture,
+        type: "folder",
+      },
+    });
   } else {
     res.status(500);
     res.send({ message: "Folder failed to be created." });
@@ -86,8 +93,31 @@ export const createFolder = async (req: Request, res: Response) => {
 };
 
 export const createItem = async (req: Request, res: Response) => {
-  res.status(200);
-  res.send({ message: "createItem endpoint" });
+  // insert into items (itemid, name, description, picture, owner, parent_folder, created, updated) VALUES (...);
+  const newItem = req.body.newElement as CreateRequest;
+  const clientid = req.body.clientid as string;
+
+  let userid = await getUserId(clientid);
+  let newItemId = uuidv4();
+  let currentTime = getCurrentTimeField();
+
+  const createItemQuery = `INSERT INTO items (itemid, name, description, picture, owner, parent_folder, created, updated) VALUES ('${newItemId}', '${newItem.name}', '${newItem.description}', '${newItem.picture}', '${userid}', '${newItem.parent_folder}', '${currentTime}', '${currentTime}');`;
+  let { code, rows } = await performQuery(createItemQuery);
+
+  if (code === 200) {
+    res.status(200);
+    res.send({
+      createdElement: {
+        id: newItemId,
+        name: newItem.name,
+        picture: newItem.picture,
+        type: "item",
+      },
+    });
+  } else {
+    res.status(500);
+    res.send({ message: "Item failed to be created." });
+  }
 };
 
 export const updateFolder = async (req: Request, res: Response) => {

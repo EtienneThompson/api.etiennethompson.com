@@ -1,4 +1,4 @@
-export interface CreateFolderRequest {
+export interface CreateRequest {
   name: string;
   description: string;
   picture: string;
