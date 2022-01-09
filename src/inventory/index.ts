@@ -1,14 +1,21 @@
 import { Request, Response } from "express";
+import { v4 as uuidv4 } from "uuid";
 import { performQuery } from "../utils/database";
+import { getCurrentTimeField } from "../utils/date";
+import { CreateFolderRequest } from "./types";
+
+const getUserId = async (clientid: string): Promise<string> => {
+  const getUserIdQuery = `SELECT userid FROM users WHERE clientid='${clientid}'`;
+  let { code, rows } = await performQuery(getUserIdQuery);
+  // The client id was verified in middleware, so this should always return a value.
+  return rows[0].userid as string;
+};
 
 export const getFolder = async (req: Request, res: Response) => {
   let params = req.query;
-  const getUserIdQuery = `SELECT userid FROM users WHERE clientid='${params.clientid}'`;
-  let { code, rows } = await performQuery(getUserIdQuery);
-  // The client id was verified in middleware, so this should always return a value.
-  let userid = rows[0].userid;
-  const getFolderQuery = `SELECT folderid, name, picture, description, parent_folder, created, modified FROM folders WHERE folderid='${params.folderid}' AND owner='${userid}'`;
-  ({ code, rows } = await performQuery(getFolderQuery));
+  let userid = await getUserId(params.clientid as string);
+  const getFolderQuery = `SELECT folderid, name, picture, description, parent_folder, created, updated FROM folders WHERE folderid='${params.folderid}' AND owner='${userid}'`;
+  let { code, rows } = await performQuery(getFolderQuery);
   if (code !== 200) {
     res.status(404);
     res.send({ message: "That folder was not found." });
@@ -44,12 +51,9 @@ export const getFolder = async (req: Request, res: Response) => {
 
 export const getItem = async (req: Request, res: Response) => {
   let params = req.query;
-  const getUserIdQuery = `SELECT userid FROM users WHERE clientid='${params.clientid}'`;
-  let { code, rows } = await performQuery(getUserIdQuery);
-  // The client id was verified in middleware, so this should always return a value.
-  let userid = rows[0].userid;
+  let userid = await getUserId(params.clientid as string);
   const getItemQuery = `SELECT itemid, name, picture, description, parent_folder, created, updated FROM items WHERE itemid='${params.itemid}' AND owner='${userid}'`;
-  ({ code, rows } = await performQuery(getItemQuery));
+  let { code, rows } = await performQuery(getItemQuery);
   if (code !== 200) {
     res.status(404);
     res.send({ message: "That item was not found." });
@@ -61,8 +65,24 @@ export const getItem = async (req: Request, res: Response) => {
 };
 
 export const createFolder = async (req: Request, res: Response) => {
-  res.status(200);
-  res.send({ message: "createFolder endpoint" });
+  // insert into folders (folderid, name, description, owner, picture, parent_folder, created, updated) VALES (...);
+  const newFolder = req.body.newElement as CreateFolderRequest;
+  const clientid = req.body.clientid;
+
+  let userid = await getUserId(clientid);
+  let newFolderId = uuidv4();
+  let currentTime = getCurrentTimeField();
+
+  const createFolderQuery = `INSERT INTO folders (folderid, name, description, picture, owner, parent_folder, created, updated) VALUES ('${newFolderId}', '${newFolder.name}', '${newFolder.description}', '${newFolder.picture}', '${userid}', '${newFolder.parent_folder}', '${currentTime}', '${currentTime}');`;
+  let { code, rows } = await performQuery(createFolderQuery);
+
+  if (code === 200) {
+    res.status(200);
+    res.send({ message: "Folder created successfully." });
+  } else {
+    res.status(500);
+    res.send({ message: "Folder failed to be created." });
+  }
 };
 
 export const createItem = async (req: Request, res: Response) => {
