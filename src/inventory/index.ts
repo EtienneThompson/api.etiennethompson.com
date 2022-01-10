@@ -131,11 +131,36 @@ export const updateItem = async (req: Request, res: Response) => {
 };
 
 export const deleteFolder = async (req: Request, res: Response) => {
-  res.status(200);
-  res.send({ message: "deleteFolder endpoint" });
+  // delete from folders where folderid='${folderid}' and owner='${userid}'
+  const folderid: string = req.body.folderid;
+  const clientid: string = req.body.clientid;
+
+  let userid = await getUserId(clientid);
+  const deleteFolderQuery = `DELETE FROM folders WHERE folderid='${folderid}' AND owner='${userid}';`;
+  const { code, rows } = await performQuery(deleteFolderQuery);
+
+  if (code === 200) {
+    res.status(200);
+    res.send({ message: "Folder was successfully deleted." });
+  } else {
+    res.status(500);
+    res.send({ message: "Failed to delete folder." });
+  }
 };
 
 export const deleteItem = async (req: Request, res: Response) => {
-  res.status(200);
-  res.send({ message: "deleteItem endpoint" });
+  const itemid: string = req.body.itemid;
+  const clientid: string = req.body.clientid;
+
+  let userid = await getUserId(clientid);
+  const deleteItemQuery = `DELETE FROM items WHERE itemid='${itemid}' AND owner='${userid}';`;
+  const { code, rows } = await performQuery(deleteItemQuery);
+
+  if (code === 200) {
+    res.status(200);
+    res.send({ message: "Item was successfully deleted." });
+  } else {
+    res.status(500);
+    res.send({ message: "Failed to delete item." });
+  }
 };
