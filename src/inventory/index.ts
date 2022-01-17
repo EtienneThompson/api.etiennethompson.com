@@ -121,13 +121,27 @@ export const createItem = async (req: Request, res: Response) => {
 };
 
 export const updateFolder = async (req: Request, res: Response) => {
-  res.status(200);
-  res.send({ message: "updateFolder endpoint" });
+  const clientid: string = req.body.clientid;
+  var reqBody = req.body.data;
+
+  let userid = await getUserId(clientid);
+  const updateFolderQuery = `UPDATE folders SET name='${reqBody.name}', description='${reqBody.description}', picture='${reqBody.picture}' WHERE folderid='${reqBody.id}' AND owner='${userid}'`;
+  const { code, rows } = await performQuery(updateFolderQuery);
+
+  res.status(code);
+  res.send();
 };
 
 export const updateItem = async (req: Request, res: Response) => {
-  res.status(200);
-  res.send({ message: "updateItem endpoint" });
+  const clientid: string = req.body.clientid;
+  var reqBody = req.body.data;
+
+  let userid = await getUserId(clientid);
+  const updateItemQuery = `UPDATE items SET name='${reqBody.name}', description='${reqBody.description}', picture='${reqBody.picture}' WHERE itemid='${reqBody.id}' AND owner='${userid}'`;
+  const { code, rows } = await performQuery(updateItemQuery);
+
+  res.status(code);
+  res.send();
 };
 
 export const deleteFolder = async (req: Request, res: Response) => {
