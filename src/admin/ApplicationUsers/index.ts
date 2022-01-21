@@ -2,20 +2,29 @@ import { Request, Response } from "express";
 import { performQuery } from "../../utils/database";
 import { ApplicationUser } from "./types";
 
-export const getApplicationUsers = async (req: Request, res: Response) => {
+export const getApplicationUsers = async (
+  req: Request,
+  res: Response,
+  next: any
+) => {
   const client = req.body.client;
   const getApplicationUserQuery = "SELECT * FROM applicationusers;";
   const { code, rows } = await performQuery(client, getApplicationUserQuery);
   if (code === 200 && !rows) {
     res.status(400);
     res.write(JSON.stringify({ message: "No application users were found." }));
+  } else {
+    res.status(200);
+    res.write(JSON.stringify({ applicationUsers: rows }));
   }
-
-  res.status(200);
-  res.write(JSON.stringify({ applicationUsers: rows }));
+  next();
 };
 
-export const createApplicationUser = async (req: Request, res: Response) => {
+export const createApplicationUser = async (
+  req: Request,
+  res: Response,
+  next: any
+) => {
   const client = req.body.client;
   var newApplicationUser = req.body.newApplicationUser as ApplicationUser;
 
@@ -40,9 +49,14 @@ export const createApplicationUser = async (req: Request, res: Response) => {
   } else {
     res.status(500);
   }
+  next();
 };
 
-export const updateApplicationUser = async (req: Request, res: Response) => {
+export const updateApplicationUser = async (
+  req: Request,
+  res: Response,
+  next: any
+) => {
   const client = req.body.client;
   var reqBody = req.body.applicationuser as ApplicationUser;
 
@@ -53,9 +67,14 @@ export const updateApplicationUser = async (req: Request, res: Response) => {
   );
 
   res.status(code);
+  next();
 };
 
-export const deleteApplicationUser = async (req: Request, res: Response) => {
+export const deleteApplicationUser = async (
+  req: Request,
+  res: Response,
+  next: any
+) => {
   const client = req.body.client;
   var reqBody = req.body.applicationuser as ApplicationUser;
 
@@ -63,4 +82,5 @@ export const deleteApplicationUser = async (req: Request, res: Response) => {
   const { code, rows } = await performQuery(client, deleteUserQuery);
 
   res.status(code);
+  next();
 };

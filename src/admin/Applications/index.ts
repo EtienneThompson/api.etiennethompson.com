@@ -3,7 +3,11 @@ import { v4 as uuidv4 } from "uuid";
 import { performQuery } from "../../utils/database";
 import { Applications, CreateApplicationsRequest } from "./types";
 
-export const getApplications = async (req: Request, res: Response) => {
+export const getApplications = async (
+  req: Request,
+  res: Response,
+  next: any
+) => {
   const client = req.body.client;
   // select applicationname, redirecturl from applications;
   const getApplicationsQuery = "SELECT * FROM applications;";
@@ -11,13 +15,18 @@ export const getApplications = async (req: Request, res: Response) => {
   if (code === 200 && !rows) {
     res.status(400);
     res.write(JSON.stringify({ message: "No applications were found." }));
+  } else {
+    res.status(200);
+    res.write(JSON.stringify({ applications: rows }));
   }
-
-  res.status(200);
-  res.write(JSON.stringify({ applications: rows }));
+  next();
 };
 
-export const createApplication = async (req: Request, res: Response) => {
+export const createApplication = async (
+  req: Request,
+  res: Response,
+  next: any
+) => {
   const client = req.body.client;
   // insert into applications (applicationid, applicationname, redirecturl) values (...);
   var newApplication = req.body.newApplication as CreateApplicationsRequest;
@@ -42,9 +51,14 @@ export const createApplication = async (req: Request, res: Response) => {
     res.status(500);
     res.write(JSON.stringify({ message: "No applications were created" }));
   }
+  next();
 };
 
-export const updateApplication = async (req: Request, res: Response) => {
+export const updateApplication = async (
+  req: Request,
+  res: Response,
+  next: any
+) => {
   const client = req.body.client;
   // update applications set applicationname = '${appicationname}', redirecturl = '${redirecturl}' where applicationid='${applicationid}';
   var reqBody = req.body.application as Applications;
@@ -60,9 +74,14 @@ export const updateApplication = async (req: Request, res: Response) => {
       JSON.stringify({ message: "An application for that id does not exist." })
     );
   }
+  next();
 };
 
-export const deleteApplication = async (req: Request, res: Response) => {
+export const deleteApplication = async (
+  req: Request,
+  res: Response,
+  next: any
+) => {
   const client = req.body.client;
   var reqBody = req.body.application as Applications;
 
@@ -77,4 +96,5 @@ export const deleteApplication = async (req: Request, res: Response) => {
       JSON.stringify({ message: "An application for that id does not exist." })
     );
   }
+  next();
 };

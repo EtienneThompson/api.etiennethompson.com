@@ -9,7 +9,7 @@ import {
   DeleteUserRequest,
 } from "./types";
 
-export const getUsers = async (req: Request, res: Response) => {
+export const getUsers = async (req: Request, res: Response, next: any) => {
   const client = req.body.client;
   // select username, hashedPassword from users;
   const getUserQuery = "SELECT * FROM users;";
@@ -17,13 +17,14 @@ export const getUsers = async (req: Request, res: Response) => {
   if (code === 200 && !rows) {
     res.status(400);
     res.write(JSON.stringify({ message: "no users were found." }));
+  } else {
+    res.status(200);
+    res.write(JSON.stringify({ users: rows }));
   }
-
-  res.status(200);
-  res.write(JSON.stringify({ users: rows }));
+  next();
 };
 
-export const createUser = async (req: Request, res: Response) => {
+export const createUser = async (req: Request, res: Response, next: any) => {
   const client = req.body.client;
   // insert into users (username, hashedPassword) values ('${username}', '${hashedPassword}');
   var newUser = req.body.newUser as CreateRequestUsers;
@@ -49,9 +50,10 @@ export const createUser = async (req: Request, res: Response) => {
   } else {
     res.status(500);
   }
+  next();
 };
 
-export const updateUser = async (req: Request, res: Response) => {
+export const updateUser = async (req: Request, res: Response, next: any) => {
   const client = req.body.client;
   // update users set username = '${username}', hashedPassword = '${hashedPassword}' where userId='${userId}';
   var reqBody = req.body.user as UpdateUserRequest;
@@ -64,9 +66,10 @@ export const updateUser = async (req: Request, res: Response) => {
   } else {
     res.status(404);
   }
+  next();
 };
 
-export const deleteUser = async (req: Request, res: Response) => {
+export const deleteUser = async (req: Request, res: Response, next: any) => {
   const client = req.body.client;
   // delete from users where userId = '${userId}';
   var reqBody = req.body as DeleteUserRequest;
@@ -79,4 +82,5 @@ export const deleteUser = async (req: Request, res: Response) => {
   } else {
     res.status(404);
   }
+  next();
 };
