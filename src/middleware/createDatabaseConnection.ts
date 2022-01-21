@@ -8,5 +8,6 @@ export const createDatabaseConnection = async (
 ) => {
   const client = await connectToDatabase();
   req.body.client = client;
+  res.type("json");
   next();
 };
