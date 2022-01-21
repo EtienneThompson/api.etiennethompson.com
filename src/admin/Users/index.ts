@@ -10,19 +10,21 @@ import {
 } from "./types";
 
 export const getUsers = async (req: Request, res: Response) => {
+  const client = req.body.client;
   // select username, hashedPassword from users;
   const getUserQuery = "SELECT * FROM users;";
-  const { code, rows } = await performQuery(getUserQuery);
+  const { code, rows } = await performQuery(client, getUserQuery);
   if (code === 200 && !rows) {
     res.status(400);
-    res.send({ message: "no users were found." });
+    res.write(JSON.stringify({ message: "no users were found." }));
   }
 
   res.status(200);
-  res.send({ users: rows });
+  res.write(JSON.stringify({ users: rows }));
 };
 
 export const createUser = async (req: Request, res: Response) => {
+  const client = req.body.client;
   // insert into users (username, hashedPassword) values ('${username}', '${hashedPassword}');
   var newUser = req.body.newUser as CreateRequestUsers;
 
@@ -31,51 +33,50 @@ export const createUser = async (req: Request, res: Response) => {
   const newClientId = uuidv4();
   let expiration = createExpiration();
   const createUserQuery = `INSERT INTO users (userid, username, password, clientId, session_expiration) VALUES ('${newUserId}', '${newUser.username}', '${newUser.password}', '${newClientId}', '${expiration}');`;
-  const { code, rows } = await performQuery(createUserQuery);
+  const { code, rows } = await performQuery(client, createUserQuery);
 
   if (code === 200) {
     res.status(200);
-    res.send({
-      createdUser: {
-        username: newUser.username,
-        userid: newUserId,
-        clientid: newClientId,
-      },
-    });
+    res.write(
+      JSON.stringify({
+        createdUser: {
+          username: newUser.username,
+          userid: newUserId,
+          clientid: newClientId,
+        },
+      })
+    );
   } else {
     res.status(500);
-    res.send();
   }
 };
 
 export const updateUser = async (req: Request, res: Response) => {
+  const client = req.body.client;
   // update users set username = '${username}', hashedPassword = '${hashedPassword}' where userId='${userId}';
   var reqBody = req.body.user as UpdateUserRequest;
 
   const updateUserQuery = `UPDATE users SET username = '${reqBody.username}' WHERE userid = '${reqBody.userid}';`;
-  const { code, rows } = await performQuery(updateUserQuery);
+  const { code, rows } = await performQuery(client, updateUserQuery);
 
   if (code === 200) {
     res.status(200);
-    res.send();
   } else {
     res.status(404);
-    res.send();
   }
 };
 
 export const deleteUser = async (req: Request, res: Response) => {
+  const client = req.body.client;
   // delete from users where userId = '${userId}';
   var reqBody = req.body as DeleteUserRequest;
 
   const deleteUserQuery = `DELETE FROM users WHERE userid='${reqBody.userid}'`;
-  const { code, rows } = await performQuery(deleteUserQuery);
+  const { code, rows } = await performQuery(client, deleteUserQuery);
 
   if (code === 200) {
     res.status(200);
-    res.send();
   } else {
     res.status(404);
-    res.send();
   }
 };

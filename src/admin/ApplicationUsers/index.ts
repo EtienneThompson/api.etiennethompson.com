@@ -3,55 +3,64 @@ import { performQuery } from "../../utils/database";
 import { ApplicationUser } from "./types";
 
 export const getApplicationUsers = async (req: Request, res: Response) => {
+  const client = req.body.client;
   const getApplicationUserQuery = "SELECT * FROM applicationusers;";
-  const { code, rows } = await performQuery(getApplicationUserQuery);
+  const { code, rows } = await performQuery(client, getApplicationUserQuery);
   if (code === 200 && !rows) {
     res.status(400);
-    res.send({ message: "No application users were found." });
+    res.write(JSON.stringify({ message: "No application users were found." }));
   }
 
   res.status(200);
-  res.send({ applicationUsers: rows });
+  res.write(JSON.stringify({ applicationUsers: rows }));
 };
 
 export const createApplicationUser = async (req: Request, res: Response) => {
+  const client = req.body.client;
   var newApplicationUser = req.body.newApplicationUser as ApplicationUser;
 
   const createApplicationUserQuery = `INSERT INTO applicationusers (userid, applicationid, isuser, isadmin) VALUES ('${newApplicationUser.userid}', '${newApplicationUser.applicationid}', '${newApplicationUser.isuser}', '${newApplicationUser.isadmin}');`;
-  const { code, rows } = await performQuery(createApplicationUserQuery);
+  const { code, rows } = await performQuery(
+    client,
+    createApplicationUserQuery
+  );
 
   if (code === 200) {
     res.status(200);
-    res.send({
-      createdApplicationUser: {
-        userid: newApplicationUser.userid,
-        applicationid: newApplicationUser.applicationid,
-        isuser: newApplicationUser.isuser,
-        isadmin: newApplicationUser.isadmin,
-      },
-    });
+    res.write(
+      JSON.stringify({
+        createdApplicationUser: {
+          userid: newApplicationUser.userid,
+          applicationid: newApplicationUser.applicationid,
+          isuser: newApplicationUser.isuser,
+          isadmin: newApplicationUser.isadmin,
+        },
+      })
+    );
   } else {
     res.status(500);
-    res.send();
   }
 };
 
 export const updateApplicationUser = async (req: Request, res: Response) => {
+  const client = req.body.client;
   var reqBody = req.body.applicationuser as ApplicationUser;
 
   const updateApplicationUserQuery = `UPDATE applicationusers SET isuser = '${reqBody.isuser}', isadmin = '${reqBody.isadmin}' WHERE userid='${reqBody.userid}' AND applicationid='${reqBody.applicationid}';`;
-  const { code, rows } = await performQuery(updateApplicationUserQuery);
+  const { code, rows } = await performQuery(
+    client,
+    updateApplicationUserQuery
+  );
 
   res.status(code);
-  res.send();
 };
 
 export const deleteApplicationUser = async (req: Request, res: Response) => {
+  const client = req.body.client;
   var reqBody = req.body.applicationuser as ApplicationUser;
 
   const deleteUserQuery = `DELETE FROM applicationusers WHERE userid='${reqBody.userid}' AND applicationid='${reqBody.applicationid}';`;
-  const { code, rows } = await performQuery(deleteUserQuery);
+  const { code, rows } = await performQuery(client, deleteUserQuery);
 
   res.status(code);
-  res.send();
 };

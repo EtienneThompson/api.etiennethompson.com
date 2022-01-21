@@ -1,4 +1,6 @@
 import express, { Request, Response } from "express";
+import { createDatabaseConnection } from "./middleware/createDatabaseConnection";
+import { closeDatabaseConnection } from "./middleware/closeDatabaseConnection";
 import { validateUser } from "./middleware/validateUser";
 import { loginHandler } from "./login";
 import * as users from "./admin/Users";
@@ -28,6 +30,7 @@ var corsOptions = {
 };
 app.use(cors(corsOptions));
 app.use(express.json());
+app.use(createDatabaseConnection);
 app.use(validateUser);
 
 // Routes allowed for the api.
@@ -73,6 +76,8 @@ app.get("/inventory/item", inventory.getItem);
 app.post("/inventory/item/create", inventory.createItem);
 app.put("/inventory/item/update", inventory.updateItem);
 app.delete("/inventory/item/delete", inventory.deleteItem);
+
+app.use(closeDatabaseConnection);
 
 app.listen(port, () => {
   return console.log(`Server is listening on port ${port}`);
