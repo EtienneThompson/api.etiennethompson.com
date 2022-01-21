@@ -6,13 +6,14 @@ import { performQuery } from "../utils/database";
 import { createExpiration } from "../utils/date";
 
 export const loginHandler = async (req: Request, res: Response) => {
+  const client = req.body.client;
   var requestBody = req.body as LoginRequest;
 
   // Verify that the user exists and get the user's client id.
   let clientId: string = "";
   let userId: string = "";
   const userQuery = `SELECT * FROM users WHERE username='${requestBody.username}' AND password='${requestBody.hashedPassword}'`;
-  let { code, rows } = await performQuery(userQuery);
+  let { code, rows } = await performQuery(client, userQuery);
   if (code === 200 && rows) {
     const entry = rows[0] as UserEntry;
     clientId = entry.clientid;
@@ -26,7 +27,7 @@ export const loginHandler = async (req: Request, res: Response) => {
   // Verify the application exists and get the redirect url for that application.
   let redirectUrl: string = "";
   const applicationQuery = `SELECT * FROM applications WHERE applicationid='${requestBody.appid}'`;
-  ({ code, rows } = await performQuery(applicationQuery));
+  ({ code, rows } = await performQuery(client, applicationQuery));
   if (code === 200 && rows) {
     rows = rows as ApplicationEntry[];
     for (let i = 0; i < rows.length; i++) {
@@ -49,7 +50,7 @@ export const loginHandler = async (req: Request, res: Response) => {
 
   // Get the user, admin status for the given user for the given application.
   const applicationUsersQuery = `SELECT isuser, isadmin FROM applicationusers WHERE userid='${userId}'`;
-  ({ code, rows } = await performQuery(applicationUsersQuery));
+  ({ code, rows } = await performQuery(client, applicationUsersQuery));
   let isUser: boolean = false;
   let isAdmin: boolean = false;
   if (code !== 200) {
@@ -67,7 +68,7 @@ export const loginHandler = async (req: Request, res: Response) => {
   const newClientId = uuidv4();
   const expiration = createExpiration();
   const updateClientIdQuery = `UPDATE users SET clientid = '${newClientId}', session_expiration = '${expiration}' WHERE userid='${userId}'`;
-  ({ code, rows } = await performQuery(updateClientIdQuery));
+  ({ code, rows } = await performQuery(client, updateClientIdQuery));
   if (code !== 200) {
     res.status(500);
     res.send({ message: "There was an unexpected error. " });

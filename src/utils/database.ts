@@ -1,13 +1,7 @@
 import { Client } from "pg";
 import { QueryResponse } from "../types";
 
-/**
- * TODO: Perform the query, retrying on failed database connections.
- * @param client the database to perform the query on.
- * @param query the query to perform.
- * @returns the results of the query, undefined if no results, and null if no response.
- */
-export const performQuery = async (query: string): Promise<QueryResponse> => {
+export const connectToDatabase = async (): Promise<Client> => {
   const client = new Client({
     connectionString: process.env.DATABASE_URL,
     ssl: {
@@ -16,9 +10,21 @@ export const performQuery = async (query: string): Promise<QueryResponse> => {
   });
 
   await client.connect();
-  const { code, rows } = await makeSingleQuery(client, query);
-  await client.end();
 
+  return client;
+};
+
+/**
+ * TODO: Perform the query, retrying on failed database connections.
+ * @param client the database to perform the query on.
+ * @param query the query to perform.
+ * @returns the results of the query, undefined if no results, and null if no response.
+ */
+export const performQuery = async (
+  client: Client,
+  query: string
+): Promise<QueryResponse> => {
+  const { code, rows } = await makeSingleQuery(client, query);
   return { code, rows };
 };
 
