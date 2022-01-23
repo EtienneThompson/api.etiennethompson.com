@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { v4 as uuidv4 } from "uuid";
+import aws from "aws-sdk";
 import { performQuery } from "../utils/database";
 import { getCurrentTimeField } from "../utils/date";
 import { CreateRequest } from "./types";
@@ -9,6 +10,29 @@ const getUserId = async (client: any, clientid: string): Promise<string> => {
   let { code, rows } = await performQuery(client, getUserIdQuery);
   // The client id was verified in middleware, so this should always return a value.
   return rows[0].userid as string;
+};
+
+const uploadFile = async (fileData: any) => {
+  aws.config.update({
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+  });
+  const s3 = new aws.S3();
+  const fileContent = Buffer.from(fileData.file.data, "binary");
+  // Generate a new unique file id even if the name is not unique.
+  const fileKey = `${uuidv4()}_${fileData.file.name}`;
+
+  const params = {
+    Bucket: "etiennethompson-inventory-bucket",
+    Key: fileKey,
+    Body: fileContent,
+  };
+  s3.upload(params, (err: any, data: any) => {
+    if (err) {
+      throw err;
+    }
+  });
+  return fileKey;
 };
 
 export const getFolder = async (req: Request, res: Response, next: any) => {
@@ -71,14 +95,17 @@ export const getItem = async (req: Request, res: Response, next: any) => {
 export const createFolder = async (req: Request, res: Response, next: any) => {
   const client = req.body.client;
   // insert into folders (folderid, name, description, owner, picture, parent_folder, created, updated) VALUES (...);
-  const newFolder = req.body.newElement as CreateRequest;
+  const newFolder = req.body as CreateRequest;
   const clientid = req.body.clientid;
 
   let userid = await getUserId(client, clientid);
   let newFolderId = uuidv4();
   let currentTime = getCurrentTimeField();
 
-  const createFolderQuery = `INSERT INTO folders (folderid, name, description, picture, owner, parent_folder, created, updated) VALUES ('${newFolderId}', '${newFolder.name}', '${newFolder.description}', '${newFolder.picture}', '${userid}', '${newFolder.parent_folder}', '${currentTime}', '${currentTime}');`;
+  let imageKey = await uploadFile(req.files);
+  let imageUrl = `${process.env.AWS_BUCKET_ENDPOINT}/${imageKey}`;
+
+  const createFolderQuery = `INSERT INTO folders (folderid, name, description, picture, owner, parent_folder, created, updated) VALUES ('${newFolderId}', '${newFolder.name}', '${newFolder.description}', '${imageUrl}', '${userid}', '${newFolder.parent_folder}', '${currentTime}', '${currentTime}');`;
   let { code, rows } = await performQuery(client, createFolderQuery);
 
   if (code === 200) {
@@ -101,22 +128,19 @@ export const createFolder = async (req: Request, res: Response, next: any) => {
 };
 
 export const createItem = async (req: Request, res: Response, next: any) => {
-  console.log(req.body);
-  console.log(req.files);
-  res.status(200);
-  next();
-  return;
-
   const client = req.body.client;
   // insert into items (itemid, name, description, picture, owner, parent_folder, created, updated) VALUES (...);
-  const newItem = req.body.newElement as CreateRequest;
+  const newItem = req.body as CreateRequest;
   const clientid = req.body.clientid as string;
 
   let userid = await getUserId(client, clientid);
   let newItemId = uuidv4();
   let currentTime = getCurrentTimeField();
 
-  const createItemQuery = `INSERT INTO items (itemid, name, description, picture, owner, parent_folder, created, updated) VALUES ('${newItemId}', '${newItem.name}', '${newItem.description}', '${newItem.picture}', '${userid}', '${newItem.parent_folder}', '${currentTime}', '${currentTime}');`;
+  let imageKey = await uploadFile(req.files);
+  let imageUrl = `${process.env.AWS_BUCKET_ENDPOINT}/${imageKey}`;
+
+  const createItemQuery = `INSERT INTO items (itemid, name, description, picture, owner, parent_folder, created, updated) VALUES ('${newItemId}', '${newItem.name}', '${newItem.description}', '${imageUrl}', '${userid}', '${newItem.parent_folder}', '${currentTime}', '${currentTime}');`;
   let { code, rows } = await performQuery(client, createItemQuery);
 
   if (code === 200) {
