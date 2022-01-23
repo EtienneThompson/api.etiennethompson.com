@@ -101,6 +101,12 @@ export const createFolder = async (req: Request, res: Response, next: any) => {
 };
 
 export const createItem = async (req: Request, res: Response, next: any) => {
+  console.log(req.body);
+  console.log(req.files);
+  res.status(200);
+  next();
+  return;
+
   const client = req.body.client;
   // insert into items (itemid, name, description, picture, owner, parent_folder, created, updated) VALUES (...);
   const newItem = req.body.newElement as CreateRequest;

@@ -20,7 +20,7 @@ export const validateUser = async (req: Request, res: Response, next: any) => {
     `SELECT * FROM users WHERE clientid='${reqBody.clientid}';`
   );
   if (code !== 200) {
-    await client.close();
+    await client.end();
     res.status(401);
     res.send({ message: "You are not a valid user of etiennethompson.com." });
     return;
@@ -31,7 +31,7 @@ export const validateUser = async (req: Request, res: Response, next: any) => {
   let currentTime = new Date(getCurrentTimeField());
   let diff = session_expiration.getTime() - currentTime.getTime();
   if (diff < 0) {
-    await client.close();
+    await client.end();
     res.status(400);
     res.send({ message: "Your session has expired. Please login again." });
   }
@@ -43,7 +43,7 @@ export const validateUser = async (req: Request, res: Response, next: any) => {
     `SELECT * FROM applications WHERE applicationid='${reqBody.appid}';`
   ));
   if (code !== 200) {
-    await client.close();
+    await client.end();
     res.status(401);
     res.send({
       message: "That is not a valid application of etiennethompson.com.",
@@ -56,7 +56,7 @@ export const validateUser = async (req: Request, res: Response, next: any) => {
     `SELECT * FROM applicationusers WHERE applicationid='${reqBody.appid}' and userid='${userid}';`
   ));
   if (code !== 200) {
-    await client.close();
+    await client.end();
     res.status(401);
     res.send({ message: "You are not a user of that application." });
     return;
