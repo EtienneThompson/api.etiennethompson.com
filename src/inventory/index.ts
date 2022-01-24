@@ -12,7 +12,7 @@ const getUserId = async (client: any, clientid: string): Promise<string> => {
   return rows[0].userid as string;
 };
 
-const uploadFile = async (fileData: any) => {
+const uploadFile = async (fileData: any): Promise<string> => {
   aws.config.update({
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
     accessKeyId: process.env.AWS_ACCESS_KEY_ID,
@@ -27,12 +27,23 @@ const uploadFile = async (fileData: any) => {
     Key: fileKey,
     Body: fileContent,
   };
-  s3.upload(params, (err: any, data: any) => {
-    if (err) {
-      throw err;
-    }
+  let imageUrl = `${process.env.AWS_BUCKET_ENDPOINT}/${fileKey}`;
+  await s3.upload(params).promise();
+  return imageUrl;
+};
+
+const deleteFile = async (imageName: string): Promise<void> => {
+  aws.config.update({
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
   });
-  return fileKey;
+  const s3 = new aws.S3();
+
+  const params = {
+    Bucket: "etiennethompson-inventory-bucket",
+    Key: imageName,
+  };
+  await s3.deleteObject(params).promise();
 };
 
 export const getFolder = async (req: Request, res: Response, next: any) => {
@@ -102,8 +113,10 @@ export const createFolder = async (req: Request, res: Response, next: any) => {
   let newFolderId = uuidv4();
   let currentTime = getCurrentTimeField();
 
-  let imageKey = await uploadFile(req.files);
-  let imageUrl = `${process.env.AWS_BUCKET_ENDPOINT}/${imageKey}`;
+  let imageUrl = "";
+  if (req.files) {
+    imageUrl = await uploadFile(req.files);
+  }
 
   const createFolderQuery = `INSERT INTO folders (folderid, name, description, picture, owner, parent_folder, created, updated) VALUES ('${newFolderId}', '${newFolder.name}', '${newFolder.description}', '${imageUrl}', '${userid}', '${newFolder.parent_folder}', '${currentTime}', '${currentTime}');`;
   let { code, rows } = await performQuery(client, createFolderQuery);
@@ -115,7 +128,7 @@ export const createFolder = async (req: Request, res: Response, next: any) => {
         createdElement: {
           id: newFolderId,
           name: newFolder.name,
-          picture: newFolder.picture,
+          picture: imageUrl,
           type: "folder",
         },
       })
@@ -137,8 +150,10 @@ export const createItem = async (req: Request, res: Response, next: any) => {
   let newItemId = uuidv4();
   let currentTime = getCurrentTimeField();
 
-  let imageKey = await uploadFile(req.files);
-  let imageUrl = `${process.env.AWS_BUCKET_ENDPOINT}/${imageKey}`;
+  let imageUrl = "";
+  if (req.files) {
+    imageUrl = await uploadFile(req.files);
+  }
 
   const createItemQuery = `INSERT INTO items (itemid, name, description, picture, owner, parent_folder, created, updated) VALUES ('${newItemId}', '${newItem.name}', '${newItem.description}', '${imageUrl}', '${userid}', '${newItem.parent_folder}', '${currentTime}', '${currentTime}');`;
   let { code, rows } = await performQuery(client, createItemQuery);
@@ -150,7 +165,7 @@ export const createItem = async (req: Request, res: Response, next: any) => {
         createdElement: {
           id: newItemId,
           name: newItem.name,
-          picture: newItem.picture,
+          picture: imageUrl,
           type: "item",
         },
       })
@@ -165,11 +180,30 @@ export const createItem = async (req: Request, res: Response, next: any) => {
 export const updateFolder = async (req: Request, res: Response, next: any) => {
   const client = req.body.client;
   const clientid: string = req.body.clientid;
-  var reqBody = req.body.data;
+  var reqBody = req.body;
 
   let userid = await getUserId(client, clientid);
-  const updateFolderQuery = `UPDATE folders SET name='${reqBody.name}', description='${reqBody.description}', picture='${reqBody.picture}' WHERE folderid='${reqBody.id}' AND owner='${userid}'`;
-  const { code, rows } = await performQuery(client, updateFolderQuery);
+  const getCurrentPictureQuery = `SELECT picture FROM folders WHERE folderid='${reqBody.id}' AND owner='${userid}';`;
+  let { code, rows } = await performQuery(client, getCurrentPictureQuery);
+  let currentPicture = rows[0].picture as string;
+
+  let updateImageUrl = "";
+  if (
+    req.files &&
+    currentPicture.includes(`${process.env.AWS_BUCKET_ENDPOINT}`)
+  ) {
+    // We're trying to upload a new image and one already existed, so delete
+    // the old one.
+    await deleteFile(currentPicture);
+  }
+
+  if (req.files) {
+    // We're uploading a new image.
+    updateImageUrl = await uploadFile(req.files);
+  }
+
+  const updateFolderQuery = `UPDATE folders SET name='${reqBody.name}', description='${reqBody.description}', picture='${updateImageUrl}' WHERE folderid='${reqBody.id}' AND owner='${userid}'`;
+  ({ code, rows } = await performQuery(client, updateFolderQuery));
 
   res.status(code);
   next();
@@ -178,11 +212,27 @@ export const updateFolder = async (req: Request, res: Response, next: any) => {
 export const updateItem = async (req: Request, res: Response, next: any) => {
   const client = req.body.client;
   const clientid: string = req.body.clientid;
-  var reqBody = req.body.data;
+  var reqBody = req.body;
 
   let userid = await getUserId(client, clientid);
-  const updateItemQuery = `UPDATE items SET name='${reqBody.name}', description='${reqBody.description}', picture='${reqBody.picture}' WHERE itemid='${reqBody.id}' AND owner='${userid}'`;
-  const { code, rows } = await performQuery(client, updateItemQuery);
+  const getCurrentPictureQuery = `SELECT picture FROM items WHERE itemid='${reqBody.id}' AND owner='${userid}';`;
+  let { code, rows } = await performQuery(client, getCurrentPictureQuery);
+  let currentPicture = rows[0].picture;
+
+  let updatedImageUrl = "";
+  if (
+    req.files &&
+    currentPicture.includes(`${process.env.AWS_BUCKET_ENDPOINT}`)
+  ) {
+    await deleteFile(currentPicture);
+  }
+
+  if (req.files) {
+    updatedImageUrl = await uploadFile(req.files);
+  }
+
+  const updateItemQuery = `UPDATE items SET name='${reqBody.name}', description='${reqBody.description}', picture='${updatedImageUrl}' WHERE itemid='${reqBody.id}' AND owner='${userid}'`;
+  ({ code, rows } = await performQuery(client, updateItemQuery));
 
   res.status(code);
   next();
@@ -195,8 +245,17 @@ export const deleteFolder = async (req: Request, res: Response, next: any) => {
   const clientid: string = req.body.clientid;
 
   let userid = await getUserId(client, clientid);
+  const getPictureQuery = `SELECT picture FROM folders WHERE folderid='${folderid}' AND owner='${userid}';`;
+  let { code, rows } = await performQuery(client, getPictureQuery);
+  let currentPicture = rows[0].picture;
+
   const deleteFolderQuery = `DELETE FROM folders WHERE folderid='${folderid}' AND owner='${userid}';`;
-  const { code, rows } = await performQuery(client, deleteFolderQuery);
+  ({ code, rows } = await performQuery(client, deleteFolderQuery));
+
+  if (code === 200) {
+    // Only delete the file in AWS if deletion from database was successful.
+    await deleteFile(currentPicture);
+  }
 
   if (code === 200) {
     res.status(200);
@@ -214,8 +273,17 @@ export const deleteItem = async (req: Request, res: Response, next: any) => {
   const clientid: string = req.body.clientid;
 
   let userid = await getUserId(client, clientid);
+  const getPictureQuery = `SELECT picture FROM items WHERE itemid='${itemid}' AND owner='${userid}';`;
+  let { code, rows } = await performQuery(client, getPictureQuery);
+  let currentPicture = rows[0].picture;
+
   const deleteItemQuery = `DELETE FROM items WHERE itemid='${itemid}' AND owner='${userid}';`;
-  const { code, rows } = await performQuery(client, deleteItemQuery);
+  ({ code, rows } = await performQuery(client, deleteItemQuery));
+
+  if (code === 200) {
+    // Only delete the file in AWS if deletion from database was successful.
+    await deleteFile(currentPicture);
+  }
 
   if (code === 200) {
     res.status(200);
