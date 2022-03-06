@@ -10,6 +10,7 @@ import * as inventory from "./inventory";
 
 require("dotenv").config();
 const cors = require("cors");
+const fileUpload = require("express-fileupload");
 
 const app = express();
 const port = process.env.PORT || "4000";
@@ -30,6 +31,7 @@ var corsOptions = {
 };
 app.use(cors(corsOptions));
 app.use(express.json());
+app.use(fileUpload());
 app.use(createDatabaseConnection);
 app.use(validateUser);
 
