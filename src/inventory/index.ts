@@ -192,7 +192,7 @@ export const updateFolder = async (req: Request, res: Response, next: any) => {
   let { code, rows } = await performQuery(client, getCurrentPictureQuery);
   let currentPicture = rows[0].picture as string;
 
-  let updateImageUrl = "";
+  let updatedImageUrl = "";
   if (
     req.files &&
     currentPicture.includes(`${process.env.AWS_BUCKET_ENDPOINT}`)
@@ -204,16 +204,24 @@ export const updateFolder = async (req: Request, res: Response, next: any) => {
 
   if (req.files) {
     // We're uploading a new image.
-    updateImageUrl = await uploadFile(req.files);
+    updatedImageUrl = await uploadFile(req.files);
   }
 
-  const updateFolderQuery = `UPDATE folders SET name='${reqBody.name}', description='${reqBody.description}', picture='${updateImageUrl}' WHERE folderid='${reqBody.id}' AND owner='${userid}'`;
+  let updateFolderQuery;
+  if (updatedImageUrl) {
+    updateFolderQuery = `UPDATE folders SET name='${reqBody.name}', description='${reqBody.description}', picture='${updatedImageUrl}' WHERE folderid='${reqBody.id}' AND owner='${userid}'`;
+  } else {
+    updateFolderQuery = `UPDATE folders SET name='${reqBody.name}', description='${reqBody.description}' WHERE folderid='${reqBody.id}' AND owner='${userid}'`;
+  }
   ({ code, rows } = await performQuery(client, updateFolderQuery));
+
+  // Determine which picture to send to the user.
+  let returnImageUrl = updatedImageUrl ? updatedImageUrl : currentPicture;
 
   res.status(code);
   res.write(
     JSON.stringify({
-      picture: updateImageUrl,
+      picture: returnImageUrl,
     })
   );
   next();
@@ -241,13 +249,22 @@ export const updateItem = async (req: Request, res: Response, next: any) => {
     updatedImageUrl = await uploadFile(req.files);
   }
 
-  const updateItemQuery = `UPDATE items SET name='${reqBody.name}', description='${reqBody.description}', picture='${updatedImageUrl}' WHERE itemid='${reqBody.id}' AND owner='${userid}'`;
+  let updateItemQuery;
+  // Determine SQL command based on it image was uploaded or not.
+  if (updatedImageUrl) {
+    updateItemQuery = `UPDATE items SET name='${reqBody.name}', description='${reqBody.description}', picture='${updatedImageUrl}' WHERE itemid='${reqBody.id}' AND owner='${userid}'`;
+  } else {
+    updateItemQuery = `UPDATE items SET name='${reqBody.name}', description='${reqBody.description}' WHERE itemid='${reqBody.id}' AND owner='${userid}'`;
+  }
   ({ code, rows } = await performQuery(client, updateItemQuery));
+
+  // Determine what image to return.
+  let returnImageUrl = updatedImageUrl ? updatedImageUrl : currentPicture;
 
   res.status(code);
   res.write(
     JSON.stringify({
-      picture: updatedImageUrl,
+      picture: returnImageUrl,
     })
   );
   next();
