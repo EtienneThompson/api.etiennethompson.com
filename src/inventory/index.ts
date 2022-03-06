@@ -32,12 +32,17 @@ const uploadFile = async (fileData: any): Promise<string> => {
   return imageUrl;
 };
 
-const deleteFile = async (imageName: string): Promise<void> => {
+const deleteFile = async (imageUrl: string): Promise<void> => {
   aws.config.update({
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
     accessKeyId: process.env.AWS_ACCESS_KEY_ID,
   });
   const s3 = new aws.S3();
+
+  let imageName = imageUrl.split("/").pop();
+  if (!imageName) {
+    return;
+  }
 
   const params = {
     Bucket: "etiennethompson-inventory-bucket",
@@ -206,6 +211,11 @@ export const updateFolder = async (req: Request, res: Response, next: any) => {
   ({ code, rows } = await performQuery(client, updateFolderQuery));
 
   res.status(code);
+  res.write(
+    JSON.stringify({
+      picture: updateImageUrl,
+    })
+  );
   next();
 };
 
@@ -235,6 +245,11 @@ export const updateItem = async (req: Request, res: Response, next: any) => {
   ({ code, rows } = await performQuery(client, updateItemQuery));
 
   res.status(code);
+  res.write(
+    JSON.stringify({
+      picture: updatedImageUrl,
+    })
+  );
   next();
 };
 
