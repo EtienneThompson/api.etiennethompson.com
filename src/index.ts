@@ -73,6 +73,7 @@ app.get("/inventory/folder", inventory.getFolder);
 app.post("/inventory/folder/create", inventory.createFolder);
 app.put("/inventory/folder/update", inventory.updateFolder);
 app.delete("/inventory/folder/delete", inventory.deleteFolder);
+app.get("/inventory/folder/base", inventory.getBaseFolder);
 
 app.get("/inventory/item", inventory.getItem);
 app.post("/inventory/item/create", inventory.createItem);
