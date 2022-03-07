@@ -51,6 +51,29 @@ const deleteFile = async (imageUrl: string): Promise<void> => {
   await s3.deleteObject(params).promise();
 };
 
+export const getBaseFolder = async (
+  req: Request,
+  res: Response,
+  next: any
+) => {
+  const client = req.body.client;
+  let params = req.query;
+  let userid = await getUserId(client, params.clientid as string);
+  const getBaseFolderQuery = `SELECT folderid, name, picture FROM folders WHERE owner='${userid}' AND parent_folder is null;`;
+  const { code, rows } = await performQuery(client, getBaseFolderQuery);
+  if (code !== 200) {
+    res.status(404);
+    res.write(JSON.stringify({ message: "You have no root folder." }));
+    next();
+    return;
+  }
+
+  let folderInfo = rows[0];
+  res.status(200);
+  res.write(JSON.stringify({ folder: folderInfo }));
+  next();
+};
+
 export const getFolder = async (req: Request, res: Response, next: any) => {
   const client = req.body.client;
   let params = req.query;
@@ -60,6 +83,7 @@ export const getFolder = async (req: Request, res: Response, next: any) => {
   if (code !== 200) {
     res.status(404);
     res.write(JSON.stringify({ message: "That folder was not found." }));
+    next();
     return;
   }
   let folderInfo = rows[0];
@@ -100,6 +124,7 @@ export const getItem = async (req: Request, res: Response, next: any) => {
   if (code !== 200) {
     res.status(404);
     res.write(JSON.stringify({ message: "That item was not found." }));
+    next();
     return;
   }
   let itemInfo = rows[0];
