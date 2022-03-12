@@ -5,7 +5,7 @@ import { UserEntry } from "../types";
 import { performQuery } from "../utils/database";
 import { createExpiration } from "../utils/date";
 
-export const loginHandler = async (req: Request, res: Response) => {
+export const loginHandler = async (req: Request, res: Response, next: any) => {
   const client = req.body.client;
   var requestBody = req.body as LoginRequest;
 
@@ -21,7 +21,9 @@ export const loginHandler = async (req: Request, res: Response) => {
   } else {
     // No results, return an error message.
     res.status(404);
-    res.send({ message: "That user doesn't exist" });
+    res.write(JSON.stringify({ message: "That user doesn't exist" }));
+    next();
+    return;
   }
 
   // Verify the application exists and get the redirect url for that application.
@@ -38,14 +40,20 @@ export const loginHandler = async (req: Request, res: Response) => {
       }
     }
     if (redirectUrl === "") {
-      res.status(404).send({
-        message: "Could not find matching redirect url for given base.",
-      });
+      res.status(404).write(
+        JSON.stringify({
+          message: "Could not find matching redirect url for given base.",
+        })
+      );
+      next();
+      return;
     }
   } else {
     // No results, return an error message.
     res.status(404);
-    res.send({ message: "That application doesn't exist." });
+    res.write(JSON.stringify({ message: "That application doesn't exist." }));
+    next();
+    return;
   }
 
   // Get the user, admin status for the given user for the given application.
@@ -55,9 +63,13 @@ export const loginHandler = async (req: Request, res: Response) => {
   let isAdmin: boolean = false;
   if (code !== 200) {
     res.status(404);
-    res.send({
-      message: "That user is not a member of the given application.",
-    });
+    res.write(
+      JSON.stringify({
+        message: "That user is not a member of the given application.",
+      })
+    );
+    next();
+    return;
   } else {
     const appUsers = rows[0] as UserAdminStatus;
     isUser = appUsers.isuser;
@@ -71,14 +83,20 @@ export const loginHandler = async (req: Request, res: Response) => {
   ({ code, rows } = await performQuery(client, updateClientIdQuery));
   if (code !== 200) {
     res.status(500);
-    res.send({ message: "There was an unexpected error. " });
+    res.write(JSON.stringify({ message: "There was an unexpected error. " }));
+    next();
+    return;
   }
 
   res.status(200);
-  res.send({
-    clientId: newClientId,
-    redirectUrl: redirectUrl,
-    isUser: isUser,
-    isAdmin: isAdmin,
-  });
+  res.write(
+    JSON.stringify({
+      clientId: newClientId,
+      redirectUrl: redirectUrl,
+      isUser: isUser,
+      isAdmin: isAdmin,
+    })
+  );
+  next();
+  return;
 };
