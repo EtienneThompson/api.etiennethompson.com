@@ -22,8 +22,10 @@ const uploadFile = async (fileData: any): Promise<string> => {
   // Generate a new unique file id even if the name is not unique.
   const fileKey = `${uuidv4()}_${fileData.file.name}`;
 
+  let bucketName: string = process.env.AWS_BUCKET_NAME || "";
+
   const params = {
-    Bucket: "etiennethompson-inventory-bucket",
+    Bucket: bucketName,
     Key: fileKey,
     Body: fileContent,
   };
@@ -220,6 +222,7 @@ export const updateFolder = async (req: Request, res: Response, next: any) => {
   let updatedImageUrl = "";
   if (
     req.files &&
+    currentPicture &&
     currentPicture.includes(`${process.env.AWS_BUCKET_ENDPOINT}`)
   ) {
     // We're trying to upload a new image and one already existed, so delete
