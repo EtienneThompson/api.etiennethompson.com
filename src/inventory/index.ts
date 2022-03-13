@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { v4 as uuidv4 } from "uuid";
 import aws from "aws-sdk";
 import { performQuery } from "../utils/database";
-import { getCurrentTimeField } from "../utils/date";
+import { getCurrentTimeField, createReadableTimeField } from "../utils/date";
 import { CreateRequest } from "./types";
 
 const getUserId = async (client: any, clientid: string): Promise<string> => {
@@ -82,6 +82,7 @@ export const getFolder = async (req: Request, res: Response, next: any) => {
   let userid = await getUserId(client, params.clientid as string);
   const getFolderQuery = `SELECT folderid, name, picture, description, parent_folder, created, updated FROM folders WHERE folderid='${params.folderid}' AND owner='${userid}'`;
   let { code, rows } = await performQuery(client, getFolderQuery);
+
   if (code !== 200) {
     res.status(404);
     res.write(JSON.stringify({ message: "That folder was not found." }));
@@ -93,6 +94,7 @@ export const getFolder = async (req: Request, res: Response, next: any) => {
   const getFolderChildrenQuery = `SELECT folderid, name, picture FROM folders WHERE parent_folder='${params.folderid}' AND owner='${userid}'`;
   const getItemChildrenQuery = `SELECT itemid, name, picture FROM items WHERE parent_folder='${params.folderid}' AND owner='${userid}'`;
   ({ code, rows } = await performQuery(client, getFolderChildrenQuery));
+
   let children: any[] = [];
   if (code === 200) {
     let folderChildren = rows.map((child) => {
@@ -102,6 +104,7 @@ export const getFolder = async (req: Request, res: Response, next: any) => {
     });
     children = children.concat(folderChildren);
   }
+
   ({ code, rows } = await performQuery(client, getItemChildrenQuery));
   if (code === 200) {
     let itemChildren = rows.map((child) => {
@@ -111,7 +114,10 @@ export const getFolder = async (req: Request, res: Response, next: any) => {
     });
     children = children.concat(itemChildren);
   }
+
   folderInfo.children = children;
+  folderInfo.created = createReadableTimeField(folderInfo.created);
+  folderInfo.updated = createReadableTimeField(folderInfo.updated);
   res.status(200);
   res.write(JSON.stringify({ folder: folderInfo }));
   next();
@@ -123,13 +129,17 @@ export const getItem = async (req: Request, res: Response, next: any) => {
   let userid = await getUserId(client, params.clientid as string);
   const getItemQuery = `SELECT itemid, name, picture, description, parent_folder, created, updated FROM items WHERE itemid='${params.itemid}' AND owner='${userid}'`;
   let { code, rows } = await performQuery(client, getItemQuery);
+
   if (code !== 200) {
     res.status(404);
     res.write(JSON.stringify({ message: "That item was not found." }));
     next();
     return;
   }
+
   let itemInfo = rows[0];
+  itemInfo.created = createReadableTimeField(itemInfo.created);
+  itemInfo.updated = createReadableTimeField(itemInfo.updated);
   res.status(200);
   res.write(JSON.stringify({ item: itemInfo }));
   next();
