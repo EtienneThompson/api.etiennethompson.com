@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { v4 as uuidv4 } from "uuid";
 import aws from "aws-sdk";
 import { performQuery } from "../utils/database";
-import { getCurrentTimeField } from "../utils/date";
+import { getCurrentTimeField, createReadableTimeField } from "../utils/date";
 import { CreateRequest } from "./types";
 
 const getUserId = async (client: any, clientid: string): Promise<string> => {
@@ -112,6 +112,8 @@ export const getFolder = async (req: Request, res: Response, next: any) => {
     children = children.concat(itemChildren);
   }
   folderInfo.children = children;
+  folderInfo.created = createReadableTimeField(folderInfo.created);
+  folderInfo.updated = createReadableTimeField(folderInfo.updated);
   res.status(200);
   res.write(JSON.stringify({ folder: folderInfo }));
   next();
@@ -130,6 +132,8 @@ export const getItem = async (req: Request, res: Response, next: any) => {
     return;
   }
   let itemInfo = rows[0];
+  itemInfo.created = createReadableTimeField(itemInfo.created);
+  itemInfo.updated = createReadableTimeField(itemInfo.updated);
   res.status(200);
   res.write(JSON.stringify({ item: itemInfo }));
   next();
