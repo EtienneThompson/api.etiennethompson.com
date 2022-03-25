@@ -50,7 +50,7 @@ export const createReadableTimeField = (currentDate: Date): string => {
 
   // Check whether it is am or pm.
   let timeOfDay = "";
-  if (hour % 12 == 1) {
+  if (hour / 12 > 1) {
     timeOfDay = "pm";
   } else {
     timeOfDay = "am";
