@@ -246,10 +246,12 @@ export const updateFolder = async (req: Request, res: Response, next: any) => {
   }
 
   let updateFolderQuery;
+  let updatedTime = getCurrentTimeField();
+  let currentDate = new Date();
   if (updatedImageUrl) {
-    updateFolderQuery = `UPDATE folders SET name='${reqBody.name}', description='${reqBody.description}', picture='${updatedImageUrl}' WHERE folderid='${reqBody.id}' AND owner='${userid}'`;
+    updateFolderQuery = `UPDATE folders SET name='${reqBody.name}', description='${reqBody.description}', picture='${updatedImageUrl}', updated='${updatedTime}' WHERE folderid='${reqBody.id}' AND owner='${userid}'`;
   } else {
-    updateFolderQuery = `UPDATE folders SET name='${reqBody.name}', description='${reqBody.description}' WHERE folderid='${reqBody.id}' AND owner='${userid}'`;
+    updateFolderQuery = `UPDATE folders SET name='${reqBody.name}', description='${reqBody.description}', updated='${updatedTime}' WHERE folderid='${reqBody.id}' AND owner='${userid}'`;
   }
   ({ code, rows } = await performQuery(client, updateFolderQuery));
 
@@ -260,6 +262,7 @@ export const updateFolder = async (req: Request, res: Response, next: any) => {
   res.write(
     JSON.stringify({
       picture: returnImageUrl,
+      updated: createReadableTimeField(currentDate),
     })
   );
   next();
@@ -288,11 +291,13 @@ export const updateItem = async (req: Request, res: Response, next: any) => {
   }
 
   let updateItemQuery;
+  let updatedTime = getCurrentTimeField();
+  let currentDate = new Date();
   // Determine SQL command based on it image was uploaded or not.
   if (updatedImageUrl) {
-    updateItemQuery = `UPDATE items SET name='${reqBody.name}', description='${reqBody.description}', picture='${updatedImageUrl}' WHERE itemid='${reqBody.id}' AND owner='${userid}'`;
+    updateItemQuery = `UPDATE items SET name='${reqBody.name}', description='${reqBody.description}', picture='${updatedImageUrl}', updated='${updatedTime}' WHERE itemid='${reqBody.id}' AND owner='${userid}'`;
   } else {
-    updateItemQuery = `UPDATE items SET name='${reqBody.name}', description='${reqBody.description}' WHERE itemid='${reqBody.id}' AND owner='${userid}'`;
+    updateItemQuery = `UPDATE items SET name='${reqBody.name}', description='${reqBody.description}', updated='${updatedTime}' WHERE itemid='${reqBody.id}' AND owner='${userid}'`;
   }
   ({ code, rows } = await performQuery(client, updateItemQuery));
 
@@ -303,6 +308,7 @@ export const updateItem = async (req: Request, res: Response, next: any) => {
   res.write(
     JSON.stringify({
       picture: returnImageUrl,
+      updated: createReadableTimeField(currentDate),
     })
   );
   next();
