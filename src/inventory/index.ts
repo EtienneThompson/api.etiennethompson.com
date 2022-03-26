@@ -46,8 +46,10 @@ const deleteFile = async (imageUrl: string): Promise<void> => {
     return;
   }
 
+  let bucketName: string = process.env.AWS_BUCKET_NAME || "";
+
   const params = {
-    Bucket: "etiennethompson-inventory-bucket",
+    Bucket: bucketName,
     Key: imageName,
   };
   await s3.deleteObject(params).promise();
