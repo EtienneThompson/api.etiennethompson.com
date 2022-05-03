@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { v4 as uuidv4 } from "uuid";
-import { performQuery } from "../../utils/database";
+import { QueryProps, performQuery } from "../../utils/database";
 import { createExpiration } from "../../utils/date";
 import {
   Users,
@@ -12,8 +12,11 @@ import {
 export const getUsers = async (req: Request, res: Response, next: any) => {
   const client = req.body.client;
   // select username, hashedPassword from users;
-  const getUserQuery = "SELECT * FROM users;";
-  const { code, rows } = await performQuery(client, getUserQuery);
+  let query: QueryProps = {
+    text: "SELECT * FROM users;",
+    values: [],
+  };
+  const { code, rows } = await performQuery(client, query);
   if (code === 200 && !rows) {
     res.status(400);
     res.write(JSON.stringify({ message: "no users were found." }));
@@ -33,8 +36,18 @@ export const createUser = async (req: Request, res: Response, next: any) => {
   const newUserId = uuidv4();
   const newClientId = uuidv4();
   let expiration = createExpiration();
-  const createUserQuery = `INSERT INTO users (userid, username, password, clientId, session_expiration) VALUES ('${newUserId}', '${newUser.username}', '${newUser.password}', '${newClientId}', '${expiration}');`;
-  const { code, rows } = await performQuery(client, createUserQuery);
+
+  let query: QueryProps = {
+    text: "INSERT INTO users (userid, username, password, clientid, session_expiration) VALUES ('$1', '$2', '$3', '$4', '$5');",
+    values: [
+      newUserId,
+      newUser.username,
+      newUser.password,
+      newClientId,
+      expiration,
+    ],
+  };
+  const { code, rows } = await performQuery(client, query);
 
   if (code === 200) {
     res.status(200);
@@ -58,8 +71,11 @@ export const updateUser = async (req: Request, res: Response, next: any) => {
   // update users set username = '${username}', hashedPassword = '${hashedPassword}' where userId='${userId}';
   var reqBody = req.body.user as UpdateUserRequest;
 
-  const updateUserQuery = `UPDATE users SET username = '${reqBody.username}' WHERE userid = '${reqBody.userid}';`;
-  const { code, rows } = await performQuery(client, updateUserQuery);
+  let query: QueryProps = {
+    text: "UPDATE users SET username='$1' WHERE userid='$2';",
+    values: [reqBody.username, reqBody.userid],
+  };
+  const { code, rows } = await performQuery(client, query);
 
   if (code === 200) {
     res.status(200);
@@ -74,8 +90,11 @@ export const deleteUser = async (req: Request, res: Response, next: any) => {
   // delete from users where userId = '${userId}';
   var reqBody = req.body as DeleteUserRequest;
 
-  const deleteUserQuery = `DELETE FROM users WHERE userid='${reqBody.userid}'`;
-  const { code, rows } = await performQuery(client, deleteUserQuery);
+  let query: QueryProps = {
+    text: "DELETE FROM users WHERE userid='$1';",
+    values: [reqBody.userid],
+  };
+  const { code, rows } = await performQuery(client, query);
 
   if (code === 200) {
     res.status(200);

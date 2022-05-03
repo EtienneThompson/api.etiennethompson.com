@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { BaseRequest, UserEntry } from "../types";
-import { performQuery } from "../utils/database";
+import { QueryProps, performQuery } from "../utils/database";
 import { getCurrentTimeField } from "../utils/date";
 
 export const validateUser = async (req: Request, res: Response, next: any) => {
@@ -15,10 +15,11 @@ export const validateUser = async (req: Request, res: Response, next: any) => {
   ) as BaseRequest;
 
   // Validate that the given clientid is a user.
-  let { code, rows } = await performQuery(
-    client,
-    `SELECT * FROM users WHERE clientid='${reqBody.clientid}';`
-  );
+  let query: QueryProps = {
+    text: "SELECT * FROM users WHERE clientid='$1';",
+    values: [reqBody.clientid],
+  };
+  let { code, rows } = await performQuery(client, query);
   if (code !== 200) {
     await client.end();
     res.status(401);
@@ -38,10 +39,12 @@ export const validateUser = async (req: Request, res: Response, next: any) => {
 
   let userid = (rows[0] as UserEntry).userid;
 
-  ({ code, rows } = await performQuery(
-    client,
-    `SELECT * FROM applications WHERE applicationid='${reqBody.appid}';`
-  ));
+  query = {
+    text: "SELECT * FROM applications WHERE applicationid='$1';",
+    values: [reqBody.appid],
+  };
+  ({ code, rows } = await performQuery(client, query));
+
   if (code !== 200) {
     await client.end();
     res.status(401);
@@ -51,10 +54,12 @@ export const validateUser = async (req: Request, res: Response, next: any) => {
     return;
   }
 
-  ({ code, rows } = await performQuery(
-    client,
-    `SELECT * FROM applicationusers WHERE applicationid='${reqBody.appid}' and userid='${userid}';`
-  ));
+  query = {
+    text: "SELECT * FROM applicationusers WHERE userid='$1' AND userid='$2';",
+    values: [reqBody.appid, userid],
+  };
+  ({ code, rows } = await performQuery(client, query));
+
   if (code !== 200) {
     await client.end();
     res.status(401);

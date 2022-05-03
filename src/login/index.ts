@@ -2,18 +2,21 @@ import e, { Request, Response } from "express";
 import { v4 as uuidv4 } from "uuid";
 import { LoginRequest, ApplicationEntry, UserAdminStatus } from "./types";
 import { UserEntry } from "../types";
-import { performQuery } from "../utils/database";
+import { QueryProps, performQuery } from "../utils/database";
 import { createExpiration } from "../utils/date";
 
 export const loginHandler = async (req: Request, res: Response, next: any) => {
   const client = req.body.client;
-  var requestBody = req.body as LoginRequest;
+  var reqBody = req.body as LoginRequest;
 
   // Verify that the user exists and get the user's client id.
   let clientId: string = "";
   let userId: string = "";
-  const userQuery = `SELECT * FROM users WHERE username='${requestBody.username}' AND password='${requestBody.hashedPassword}'`;
-  let { code, rows } = await performQuery(client, userQuery);
+  let query: QueryProps = {
+    text: "SELECT * FROM users WHERE username='$1' AND password='$2';",
+    values: [reqBody.username, reqBody.hashedPassword],
+  };
+  let { code, rows } = await performQuery(client, query);
   if (code === 200 && rows) {
     const entry = rows[0] as UserEntry;
     clientId = entry.clientid;
@@ -28,13 +31,16 @@ export const loginHandler = async (req: Request, res: Response, next: any) => {
 
   // Verify the application exists and get the redirect url for that application.
   let redirectUrl: string = "";
-  const applicationQuery = `SELECT * FROM applications WHERE applicationid='${requestBody.appid}'`;
-  ({ code, rows } = await performQuery(client, applicationQuery));
+  query = {
+    text: "SELECT * FROM applications WHERE applicationid='$1';",
+    values: [reqBody.appid],
+  };
+  ({ code, rows } = await performQuery(client, query));
   if (code === 200 && rows) {
     rows = rows as ApplicationEntry[];
     for (let i = 0; i < rows.length; i++) {
       const entry = rows[i] as ApplicationEntry;
-      if (entry.redirecturl.indexOf(requestBody.redirectBase)) {
+      if (entry.redirecturl.indexOf(reqBody.redirectBase)) {
         redirectUrl = entry.redirecturl;
         break;
       }
@@ -57,8 +63,11 @@ export const loginHandler = async (req: Request, res: Response, next: any) => {
   }
 
   // Get the user, admin status for the given user for the given application.
-  const applicationUsersQuery = `SELECT isuser, isadmin FROM applicationusers WHERE userid='${userId}'`;
-  ({ code, rows } = await performQuery(client, applicationUsersQuery));
+  query = {
+    text: "SELECT isuser, isadmin FROM applicationusers WHERE userid='$1'",
+    values: [userId],
+  };
+  ({ code, rows } = await performQuery(client, query));
   let isUser: boolean = false;
   let isAdmin: boolean = false;
   if (code !== 200) {
@@ -79,8 +88,11 @@ export const loginHandler = async (req: Request, res: Response, next: any) => {
   // Generate a new clientId for the user.
   const newClientId = uuidv4();
   const expiration = createExpiration();
-  const updateClientIdQuery = `UPDATE users SET clientid = '${newClientId}', session_expiration = '${expiration}' WHERE userid='${userId}'`;
-  ({ code, rows } = await performQuery(client, updateClientIdQuery));
+  query = {
+    text: "UPDATE users SET clientid='$1', session_expiration='$2' WHERE userid='$3';",
+    values: [newClientId, expiration, userId],
+  };
+  ({ code, rows } = await performQuery(client, query));
   if (code !== 200) {
     res.status(500);
     res.write(JSON.stringify({ message: "There was an unexpected error. " }));

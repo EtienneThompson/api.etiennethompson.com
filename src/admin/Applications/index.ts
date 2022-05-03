@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { v4 as uuidv4 } from "uuid";
-import { performQuery } from "../../utils/database";
+import { QueryProps, performQuery } from "../../utils/database";
 import { Applications, CreateApplicationsRequest } from "./types";
 
 export const getApplications = async (
@@ -10,8 +10,11 @@ export const getApplications = async (
 ) => {
   const client = req.body.client;
   // select applicationname, redirecturl from applications;
-  const getApplicationsQuery = "SELECT * FROM applications;";
-  const { code, rows } = await performQuery(client, getApplicationsQuery);
+  let query: QueryProps = {
+    text: "SELECT * FROM applications;",
+    values: [],
+  };
+  const { code, rows } = await performQuery(client, query);
   if (code === 200 && !rows) {
     res.status(400);
     res.write(JSON.stringify({ message: "No applications were found." }));
@@ -33,8 +36,16 @@ export const createApplication = async (
 
   // Generate a new applicationid.
   const newApplicationId = uuidv4();
-  const createApplicationQuery = `INSERT INTO applications (applicationid, applicationname, redirecturl) VALUES ('${newApplicationId}', '${newApplication.applicationname}', '${newApplication.redirecturl}')`;
-  const { code, rows } = await performQuery(client, createApplicationQuery);
+
+  let query: QueryProps = {
+    text: "INSERT INTO applications (applicationid, applicationname, redirecturl) VALUES ('$1', '$2', '$3');",
+    values: [
+      newApplicationId,
+      newApplication.applicationname,
+      newApplication.redirecturl,
+    ],
+  };
+  const { code, rows } = await performQuery(client, query);
 
   if (code === 200) {
     res.status(200);
@@ -63,8 +74,15 @@ export const updateApplication = async (
   // update applications set applicationname = '${appicationname}', redirecturl = '${redirecturl}' where applicationid='${applicationid}';
   var reqBody = req.body.application as Applications;
 
-  const updateApplicationQuery = `UPDATE applications SET applicationname = '${reqBody.applicationname}', redirecturl = '${reqBody.redirecturl}' WHERE applicationid='${reqBody.applicationid}';`;
-  const { code, rows } = await performQuery(client, updateApplicationQuery);
+  let query: QueryProps = {
+    text: "UPDATE applications SET applicationname='$1', redirecturl='$2' WHERE applicationid='$3';",
+    values: [
+      reqBody.applicationname,
+      reqBody.redirecturl,
+      reqBody.applicationid,
+    ],
+  };
+  const { code, rows } = await performQuery(client, query);
 
   if (code === 200) {
     res.status(200);
@@ -85,8 +103,11 @@ export const deleteApplication = async (
   const client = req.body.client;
   var reqBody = req.body.application as Applications;
 
-  const deleteApplicationQuery = `DELETE FROM applications WHERE applicationid='${reqBody.applicationid}';`;
-  const { code, rows } = await performQuery(client, deleteApplicationQuery);
+  let query: QueryProps = {
+    text: "DELETE FROM applications WHERE applicationid='$1';",
+    values: [reqBody.applicationid],
+  };
+  const { code, rows } = await performQuery(client, query);
 
   if (code === 200) {
     res.status(200);
