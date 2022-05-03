@@ -13,6 +13,7 @@ export const getUsers = async (req: Request, res: Response, next: any) => {
   const client = req.body.client;
   // select username, hashedPassword from users;
   let query: QueryProps = {
+    name: "userGetQuery",
     text: "SELECT * FROM users;",
     values: [],
   };
@@ -38,7 +39,8 @@ export const createUser = async (req: Request, res: Response, next: any) => {
   let expiration = createExpiration();
 
   let query: QueryProps = {
-    text: "INSERT INTO users (userid, username, password, clientid, session_expiration) VALUES ('$1', '$2', '$3', '$4', '$5');",
+    name: "userCreateQuery",
+    text: "INSERT INTO users (userid, username, password, clientid, session_expiration) VALUES ($1, $2, $3, $4, $5);",
     values: [
       newUserId,
       newUser.username,
@@ -72,7 +74,8 @@ export const updateUser = async (req: Request, res: Response, next: any) => {
   var reqBody = req.body.user as UpdateUserRequest;
 
   let query: QueryProps = {
-    text: "UPDATE users SET username='$1' WHERE userid='$2';",
+    name: "userUpdateQuery",
+    text: "UPDATE users SET username=$1 WHERE userid=$2;",
     values: [reqBody.username, reqBody.userid],
   };
   const { code, rows } = await performQuery(client, query);
@@ -91,7 +94,8 @@ export const deleteUser = async (req: Request, res: Response, next: any) => {
   var reqBody = req.body as DeleteUserRequest;
 
   let query: QueryProps = {
-    text: "DELETE FROM users WHERE userid='$1';",
+    name: "userDeleteQuery",
+    text: "DELETE FROM users WHERE userid=$1;",
     values: [reqBody.userid],
   };
   const { code, rows } = await performQuery(client, query);

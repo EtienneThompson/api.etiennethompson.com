@@ -13,7 +13,8 @@ export const loginHandler = async (req: Request, res: Response, next: any) => {
   let clientId: string = "";
   let userId: string = "";
   let query: QueryProps = {
-    text: "SELECT * FROM users WHERE username='$1' AND password='$2';",
+    name: "loginGetUserQuery",
+    text: "SELECT * FROM users WHERE username=$1 AND password=$2;",
     values: [reqBody.username, reqBody.hashedPassword],
   };
   let { code, rows } = await performQuery(client, query);
@@ -32,7 +33,8 @@ export const loginHandler = async (req: Request, res: Response, next: any) => {
   // Verify the application exists and get the redirect url for that application.
   let redirectUrl: string = "";
   query = {
-    text: "SELECT * FROM applications WHERE applicationid='$1';",
+    name: "loginGetApplicationQuery",
+    text: "SELECT * FROM applications WHERE applicationid=$1;",
     values: [reqBody.appid],
   };
   ({ code, rows } = await performQuery(client, query));
@@ -64,7 +66,8 @@ export const loginHandler = async (req: Request, res: Response, next: any) => {
 
   // Get the user, admin status for the given user for the given application.
   query = {
-    text: "SELECT isuser, isadmin FROM applicationusers WHERE userid='$1'",
+    name: "loginGetApplicationUsersQuery",
+    text: "SELECT isuser, isadmin FROM applicationusers WHERE userid=$1",
     values: [userId],
   };
   ({ code, rows } = await performQuery(client, query));
@@ -89,7 +92,7 @@ export const loginHandler = async (req: Request, res: Response, next: any) => {
   const newClientId = uuidv4();
   const expiration = createExpiration();
   query = {
-    text: "UPDATE users SET clientid='$1', session_expiration='$2' WHERE userid='$3';",
+    text: "UPDATE users SET clientid=$1, session_expiration=$2 WHERE userid=$3;",
     values: [newClientId, expiration, userId],
   };
   ({ code, rows } = await performQuery(client, query));

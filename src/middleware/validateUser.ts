@@ -16,7 +16,8 @@ export const validateUser = async (req: Request, res: Response, next: any) => {
 
   // Validate that the given clientid is a user.
   let query: QueryProps = {
-    text: "SELECT * FROM users WHERE clientid='$1';",
+    name: "validateGetUserQuery",
+    text: "SELECT * FROM users WHERE clientid=$1;",
     values: [reqBody.clientid],
   };
   let { code, rows } = await performQuery(client, query);
@@ -40,7 +41,8 @@ export const validateUser = async (req: Request, res: Response, next: any) => {
   let userid = (rows[0] as UserEntry).userid;
 
   query = {
-    text: "SELECT * FROM applications WHERE applicationid='$1';",
+    name: "validateGetApplicationQuery",
+    text: "SELECT * FROM applications WHERE applicationid=$1;",
     values: [reqBody.appid],
   };
   ({ code, rows } = await performQuery(client, query));
@@ -55,7 +57,8 @@ export const validateUser = async (req: Request, res: Response, next: any) => {
   }
 
   query = {
-    text: "SELECT * FROM applicationusers WHERE userid='$1' AND userid='$2';",
+    name: "validateGetApplicationUsersQuery",
+    text: "SELECT * FROM applicationusers WHERE userid=$1 AND userid=$2;",
     values: [reqBody.appid, userid],
   };
   ({ code, rows } = await performQuery(client, query));

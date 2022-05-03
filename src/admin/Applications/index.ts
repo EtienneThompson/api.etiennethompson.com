@@ -11,6 +11,7 @@ export const getApplications = async (
   const client = req.body.client;
   // select applicationname, redirecturl from applications;
   let query: QueryProps = {
+    name: "appGetQuery",
     text: "SELECT * FROM applications;",
     values: [],
   };
@@ -38,7 +39,8 @@ export const createApplication = async (
   const newApplicationId = uuidv4();
 
   let query: QueryProps = {
-    text: "INSERT INTO applications (applicationid, applicationname, redirecturl) VALUES ('$1', '$2', '$3');",
+    name: "appInsertQuery",
+    text: "INSERT INTO applications (applicationid, applicationname, redirecturl) VALUES ($1, $2, $3);",
     values: [
       newApplicationId,
       newApplication.applicationname,
@@ -75,7 +77,8 @@ export const updateApplication = async (
   var reqBody = req.body.application as Applications;
 
   let query: QueryProps = {
-    text: "UPDATE applications SET applicationname='$1', redirecturl='$2' WHERE applicationid='$3';",
+    name: "appUpdateQuery",
+    text: "UPDATE applications SET applicationname=$1, redirecturl=$2 WHERE applicationid=$3;",
     values: [
       reqBody.applicationname,
       reqBody.redirecturl,
@@ -104,7 +107,8 @@ export const deleteApplication = async (
   var reqBody = req.body.application as Applications;
 
   let query: QueryProps = {
-    text: "DELETE FROM applications WHERE applicationid='$1';",
+    name: "appDeleteQuery",
+    text: "DELETE FROM applications WHERE applicationid=$1;",
     values: [reqBody.applicationid],
   };
   const { code, rows } = await performQuery(client, query);

@@ -10,6 +10,7 @@ export const getApplicationUsers = async (
   const client = req.body.client;
 
   let query: QueryProps = {
+    name: "applicationUserGetQuery",
     text: "SELECT * FROM applicationusers;",
     values: [],
   };
@@ -33,7 +34,8 @@ export const createApplicationUser = async (
   var newApplicationUser = req.body.newApplicationUser as ApplicationUser;
 
   let query: QueryProps = {
-    text: "INSERT INTO applicationusers (userid, applicationid, isuser, isadmin) VALUES ('$1', '$2', '$3', '$4');",
+    name: "appUserInsertQuery",
+    text: "INSERT INTO applicationusers (userid, applicationid, isuser, isadmin) VALUES ($1, $2, $3, $4);",
     values: [
       newApplicationUser.userid,
       newApplicationUser.applicationid,
@@ -70,7 +72,8 @@ export const updateApplicationUser = async (
   var reqBody = req.body.applicationuser as ApplicationUser;
 
   let query: QueryProps = {
-    text: "UPDATE applicationusers SET isuser='$1', isadmin='$2' WHERE userid='$3' AND applicationid='$4';",
+    name: "appUserUpdateQuery",
+    text: "UPDATE applicationusers SET isuser=$1, isadmin=$2 WHERE userid=$3 AND applicationid=$4;",
     values: [
       String(reqBody.isuser),
       String(reqBody.isadmin),
@@ -93,7 +96,8 @@ export const deleteApplicationUser = async (
   var reqBody = req.body.applicationuser as ApplicationUser;
 
   let query: QueryProps = {
-    text: "DELETE FROM applicationusers WHERE userid='$1' AND applicationid='$2';",
+    name: "appUserDeleteQuery",
+    text: "DELETE FROM applicationusers WHERE userid=$1 AND applicationid=$2;",
     values: [reqBody.userid, reqBody.applicationid],
   };
   const { code, rows } = await performQuery(client, query);
