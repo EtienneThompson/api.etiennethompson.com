@@ -1,13 +1,17 @@
 import { Request, Response } from "express";
 import { v4 as uuidv4 } from "uuid";
 import aws from "aws-sdk";
-import { performQuery } from "../utils/database";
+import { QueryProps, performQuery } from "../utils/database";
 import { getCurrentTimeField, createReadableTimeField } from "../utils/date";
 import { CreateRequest } from "./types";
 
 const getUserId = async (client: any, clientid: string): Promise<string> => {
-  const getUserIdQuery = `SELECT userid FROM users WHERE clientid='${clientid}'`;
-  let { code, rows } = await performQuery(client, getUserIdQuery);
+  let query: QueryProps = {
+    name: "inventoryGetUserIdQuery",
+    text: "SELECT userid FROM users WHERE clientid=$1;",
+    values: [clientid],
+  };
+  let { code, rows } = await performQuery(client, query);
   // The client id was verified in middleware, so this should always return a value.
   return rows[0].userid as string;
 };
@@ -46,8 +50,10 @@ const deleteFile = async (imageUrl: string): Promise<void> => {
     return;
   }
 
+  let bucketName: string = process.env.AWS_BUCKET_NAME || "";
+
   const params = {
-    Bucket: "etiennethompson-inventory-bucket",
+    Bucket: bucketName,
     Key: imageName,
   };
   await s3.deleteObject(params).promise();
@@ -61,8 +67,12 @@ export const getBaseFolder = async (
   const client = req.body.client;
   let params = req.query;
   let userid = await getUserId(client, params.clientid as string);
-  const getBaseFolderQuery = `SELECT folderid, name, picture FROM folders WHERE owner='${userid}' AND parent_folder is null;`;
-  const { code, rows } = await performQuery(client, getBaseFolderQuery);
+  let query: QueryProps = {
+    name: "inventoryGetBaseFolderQuery",
+    text: "SELECT folderid, name, picture FROM folders WHERE owner=$1 AND parent_folder is null;",
+    values: [userid],
+  };
+  const { code, rows } = await performQuery(client, query);
   if (code !== 200) {
     res.status(404);
     res.write(JSON.stringify({ message: "You have no root folder." }));
@@ -80,8 +90,12 @@ export const getFolder = async (req: Request, res: Response, next: any) => {
   const client = req.body.client;
   let params = req.query;
   let userid = await getUserId(client, params.clientid as string);
-  const getFolderQuery = `SELECT folderid, name, picture, description, parent_folder, created, updated FROM folders WHERE folderid='${params.folderid}' AND owner='${userid}'`;
-  let { code, rows } = await performQuery(client, getFolderQuery);
+  let query: QueryProps = {
+    name: "inventoryGetFolderQuery",
+    text: "SELECT folderid, name, picture, description, parent_folder, created, updated FROM folders WHERE folderid=$1 AND owner=$2;",
+    values: [params.folderid as string, userid],
+  };
+  let { code, rows } = await performQuery(client, query);
 
   if (code !== 200) {
     res.status(404);
@@ -91,9 +105,13 @@ export const getFolder = async (req: Request, res: Response, next: any) => {
   }
   let folderInfo = rows[0];
 
-  const getFolderChildrenQuery = `SELECT folderid, name, picture FROM folders WHERE parent_folder='${params.folderid}' AND owner='${userid}'`;
-  const getItemChildrenQuery = `SELECT itemid, name, picture FROM items WHERE parent_folder='${params.folderid}' AND owner='${userid}'`;
-  ({ code, rows } = await performQuery(client, getFolderChildrenQuery));
+  // Get the children folders.
+  query = {
+    name: "inventoryGetChildrenFolderQuery",
+    text: "SELECT folderid, name, picture FROM folders WHERE parent_folder=$1 AND owner=$2;",
+    values: [params.folderid as string, userid],
+  };
+  ({ code, rows } = await performQuery(client, query));
 
   let children: any[] = [];
   if (code === 200) {
@@ -105,7 +123,13 @@ export const getFolder = async (req: Request, res: Response, next: any) => {
     children = children.concat(folderChildren);
   }
 
-  ({ code, rows } = await performQuery(client, getItemChildrenQuery));
+  // Get the children items.
+  query = {
+    name: "inventoryGetChildrenItemQuery",
+    text: "SELECT itemid, name, picture FROM items WHERE parent_folder=$1 AND owner=$2;",
+    values: [params.folderid as string, userid],
+  };
+  ({ code, rows } = await performQuery(client, query));
   if (code === 200) {
     let itemChildren = rows.map((child) => {
       child.type = "item";
@@ -127,8 +151,12 @@ export const getItem = async (req: Request, res: Response, next: any) => {
   const client = req.body.client;
   let params = req.query;
   let userid = await getUserId(client, params.clientid as string);
-  const getItemQuery = `SELECT itemid, name, picture, description, parent_folder, created, updated FROM items WHERE itemid='${params.itemid}' AND owner='${userid}'`;
-  let { code, rows } = await performQuery(client, getItemQuery);
+  let query: QueryProps = {
+    name: "inventoryGetItemQuery",
+    text: "SELECT itemid, name, picture, description, parent_folder, created, updated FROM items WHERE itemid=$1 AND owner=$2;",
+    values: [params.itemid as string, userid],
+  };
+  let { code, rows } = await performQuery(client, query);
 
   if (code !== 200) {
     res.status(404);
@@ -160,8 +188,21 @@ export const createFolder = async (req: Request, res: Response, next: any) => {
     imageUrl = await uploadFile(req.files);
   }
 
-  const createFolderQuery = `INSERT INTO folders (folderid, name, description, picture, owner, parent_folder, created, updated) VALUES ('${newFolderId}', '${newFolder.name}', '${newFolder.description}', '${imageUrl}', '${userid}', '${newFolder.parent_folder}', '${currentTime}', '${currentTime}');`;
-  let { code, rows } = await performQuery(client, createFolderQuery);
+  let query: QueryProps = {
+    name: "inventoryCreateFolderQuery",
+    text: "INSERT INTO folders (folderid, name, description, picture, owner, parent_folder, created, updated) VALUES ($1, $2, $3, $4, $5, $6, $7, $8);",
+    values: [
+      newFolderId,
+      newFolder.name,
+      newFolder.description,
+      imageUrl,
+      userid,
+      newFolder.parent_folder,
+      currentTime,
+      currentTime,
+    ],
+  };
+  let { code, rows } = await performQuery(client, query);
 
   if (code === 200) {
     res.status(200);
@@ -197,8 +238,21 @@ export const createItem = async (req: Request, res: Response, next: any) => {
     imageUrl = await uploadFile(req.files);
   }
 
-  const createItemQuery = `INSERT INTO items (itemid, name, description, picture, owner, parent_folder, created, updated) VALUES ('${newItemId}', '${newItem.name}', '${newItem.description}', '${imageUrl}', '${userid}', '${newItem.parent_folder}', '${currentTime}', '${currentTime}');`;
-  let { code, rows } = await performQuery(client, createItemQuery);
+  let query: QueryProps = {
+    name: "inventoryCreateItemQuery",
+    text: "INSERT INTO items (itemid, name, description, picture, owner, parent_folder, created, updated) VALUES ($1, $2, $3, $4, $5, $6, $7, $8);",
+    values: [
+      newItemId,
+      newItem.name,
+      newItem.description,
+      imageUrl,
+      userid,
+      newItem.parent_folder,
+      currentTime,
+      currentTime,
+    ],
+  };
+  let { code, rows } = await performQuery(client, query);
 
   if (code === 200) {
     res.status(200);
@@ -225,8 +279,12 @@ export const updateFolder = async (req: Request, res: Response, next: any) => {
   var reqBody = req.body;
 
   let userid = await getUserId(client, clientid);
-  const getCurrentPictureQuery = `SELECT picture FROM folders WHERE folderid='${reqBody.id}' AND owner='${userid}';`;
-  let { code, rows } = await performQuery(client, getCurrentPictureQuery);
+  let query: QueryProps = {
+    name: "inventoryGetFolderPictureQuery",
+    text: "SELECT picture FROM folders WHERE folderid=$1 AND owner=$2;",
+    values: [reqBody.id, userid],
+  };
+  let { code, rows } = await performQuery(client, query);
   let currentPicture = rows[0].picture as string;
 
   let updatedImageUrl = "";
@@ -249,11 +307,32 @@ export const updateFolder = async (req: Request, res: Response, next: any) => {
   let updatedTime = getCurrentTimeField();
   let currentDate = new Date();
   if (updatedImageUrl) {
-    updateFolderQuery = `UPDATE folders SET name='${reqBody.name}', description='${reqBody.description}', picture='${updatedImageUrl}', updated='${updatedTime}' WHERE folderid='${reqBody.id}' AND owner='${userid}'`;
+    query = {
+      name: "inventoryUpdateFolderWithPictureQuery",
+      text: "UPDATE folders SET name=$1, description=$2, picture=$3, updated=$4 WHERE folderid=$5 AND owner=$6;",
+      values: [
+        reqBody.name,
+        reqBody.description,
+        updatedImageUrl,
+        updatedTime,
+        reqBody.id,
+        userid,
+      ],
+    };
   } else {
-    updateFolderQuery = `UPDATE folders SET name='${reqBody.name}', description='${reqBody.description}', updated='${updatedTime}' WHERE folderid='${reqBody.id}' AND owner='${userid}'`;
+    query = {
+      name: "inventoryUpdateFolderQuery",
+      text: "UPDATE folders SET name=$1, description=$2, updated=$3 WHERE folderid=$4 AND owner=$5;",
+      values: [
+        reqBody.name,
+        reqBody.description,
+        updatedTime,
+        reqBody.id,
+        userid,
+      ],
+    };
   }
-  ({ code, rows } = await performQuery(client, updateFolderQuery));
+  ({ code, rows } = await performQuery(client, query));
 
   // Determine which picture to send to the user.
   let returnImageUrl = updatedImageUrl ? updatedImageUrl : currentPicture;
@@ -274,8 +353,12 @@ export const updateItem = async (req: Request, res: Response, next: any) => {
   var reqBody = req.body;
 
   let userid = await getUserId(client, clientid);
-  const getCurrentPictureQuery = `SELECT picture FROM items WHERE itemid='${reqBody.id}' AND owner='${userid}';`;
-  let { code, rows } = await performQuery(client, getCurrentPictureQuery);
+  let query: QueryProps = {
+    name: "inventoryGetItemPictureQuery",
+    text: "SELECT picture FROM items WHERE itemid=$1 AND owner=$2;",
+    values: [reqBody.id, userid],
+  };
+  let { code, rows } = await performQuery(client, query);
   let currentPicture = rows[0].picture;
 
   let updatedImageUrl = "";
@@ -295,11 +378,32 @@ export const updateItem = async (req: Request, res: Response, next: any) => {
   let currentDate = new Date();
   // Determine SQL command based on it image was uploaded or not.
   if (updatedImageUrl) {
-    updateItemQuery = `UPDATE items SET name='${reqBody.name}', description='${reqBody.description}', picture='${updatedImageUrl}', updated='${updatedTime}' WHERE itemid='${reqBody.id}' AND owner='${userid}'`;
+    query = {
+      name: "inventoryUpdateItemWithPictureQuery",
+      text: "UPDATE items SET name=$1, description=$2, picture=$3, updated=$4 WHERE itemid=$5 AND owner=$6;",
+      values: [
+        reqBody.name,
+        reqBody.description,
+        updatedImageUrl,
+        updatedTime,
+        reqBody.id,
+        userid,
+      ],
+    };
   } else {
-    updateItemQuery = `UPDATE items SET name='${reqBody.name}', description='${reqBody.description}', updated='${updatedTime}' WHERE itemid='${reqBody.id}' AND owner='${userid}'`;
+    query = {
+      name: "inventoryUpdateItemQuery",
+      text: "UPDATE items SET name=$1, description=$2, updated=$3 WHERE itemid=$4 AND owner=$5;",
+      values: [
+        reqBody.name,
+        reqBody.description,
+        updatedTime,
+        reqBody.id,
+        userid,
+      ],
+    };
   }
-  ({ code, rows } = await performQuery(client, updateItemQuery));
+  ({ code, rows } = await performQuery(client, query));
 
   // Determine what image to return.
   let returnImageUrl = updatedImageUrl ? updatedImageUrl : currentPicture;
@@ -321,12 +425,20 @@ export const deleteFolder = async (req: Request, res: Response, next: any) => {
   const clientid: string = req.body.clientid;
 
   let userid = await getUserId(client, clientid);
-  const getPictureQuery = `SELECT picture FROM folders WHERE folderid='${folderid}' AND owner='${userid}';`;
-  let { code, rows } = await performQuery(client, getPictureQuery);
+  let query: QueryProps = {
+    name: "inventoryGetFolderPictureQuery",
+    text: "SELECT picture FROM folders WHERE folderid=$1 AND owner=$2;",
+    values: [folderid, userid],
+  };
+  let { code, rows } = await performQuery(client, query);
   let currentPicture = rows[0].picture;
 
-  const deleteFolderQuery = `DELETE FROM folders WHERE folderid='${folderid}' AND owner='${userid}';`;
-  ({ code, rows } = await performQuery(client, deleteFolderQuery));
+  query = {
+    name: "inventoryDeleteFolderQuery",
+    text: "DELETE FROM folders WHERE folderid=$1 AND owner=$2;",
+    values: [folderid, userid],
+  };
+  ({ code, rows } = await performQuery(client, query));
 
   if (code === 200) {
     // Only delete the file in AWS if deletion from database was successful.
@@ -349,12 +461,20 @@ export const deleteItem = async (req: Request, res: Response, next: any) => {
   const clientid: string = req.body.clientid;
 
   let userid = await getUserId(client, clientid);
-  const getPictureQuery = `SELECT picture FROM items WHERE itemid='${itemid}' AND owner='${userid}';`;
-  let { code, rows } = await performQuery(client, getPictureQuery);
+  let query: QueryProps = {
+    name: "inventoryGetItemPictureQuery",
+    text: "SELECT picture FROM items WHERE itemid=$1 AND owner=$2;",
+    values: [itemid, userid],
+  };
+  let { code, rows } = await performQuery(client, query);
   let currentPicture = rows[0].picture;
 
-  const deleteItemQuery = `DELETE FROM items WHERE itemid='${itemid}' AND owner='${userid}';`;
-  ({ code, rows } = await performQuery(client, deleteItemQuery));
+  query = {
+    name: "inventoryDeleteItemPicture",
+    text: "DELETE FROM items WHERE itemid=$1 AND owner=$2;",
+    values: [itemid, userid],
+  };
+  ({ code, rows } = await performQuery(client, query));
 
   if (code === 200) {
     // Only delete the file in AWS if deletion from database was successful.

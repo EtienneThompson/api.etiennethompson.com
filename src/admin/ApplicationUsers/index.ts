@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { performQuery } from "../../utils/database";
+import { QueryProps, performQuery } from "../../utils/database";
 import { ApplicationUser } from "./types";
 
 export const getApplicationUsers = async (
@@ -8,8 +8,13 @@ export const getApplicationUsers = async (
   next: any
 ) => {
   const client = req.body.client;
-  const getApplicationUserQuery = "SELECT * FROM applicationusers;";
-  const { code, rows } = await performQuery(client, getApplicationUserQuery);
+
+  let query: QueryProps = {
+    name: "applicationUserGetQuery",
+    text: "SELECT * FROM applicationusers;",
+    values: [],
+  };
+  const { code, rows } = await performQuery(client, query);
   if (code === 200 && !rows) {
     res.status(400);
     res.write(JSON.stringify({ message: "No application users were found." }));
@@ -28,11 +33,17 @@ export const createApplicationUser = async (
   const client = req.body.client;
   var newApplicationUser = req.body.newApplicationUser as ApplicationUser;
 
-  const createApplicationUserQuery = `INSERT INTO applicationusers (userid, applicationid, isuser, isadmin) VALUES ('${newApplicationUser.userid}', '${newApplicationUser.applicationid}', '${newApplicationUser.isuser}', '${newApplicationUser.isadmin}');`;
-  const { code, rows } = await performQuery(
-    client,
-    createApplicationUserQuery
-  );
+  let query: QueryProps = {
+    name: "appUserInsertQuery",
+    text: "INSERT INTO applicationusers (userid, applicationid, isuser, isadmin) VALUES ($1, $2, $3, $4);",
+    values: [
+      newApplicationUser.userid,
+      newApplicationUser.applicationid,
+      String(newApplicationUser.isuser),
+      String(newApplicationUser.isadmin),
+    ],
+  };
+  const { code, rows } = await performQuery(client, query);
 
   if (code === 200) {
     res.status(200);
@@ -60,11 +71,17 @@ export const updateApplicationUser = async (
   const client = req.body.client;
   var reqBody = req.body.applicationuser as ApplicationUser;
 
-  const updateApplicationUserQuery = `UPDATE applicationusers SET isuser = '${reqBody.isuser}', isadmin = '${reqBody.isadmin}' WHERE userid='${reqBody.userid}' AND applicationid='${reqBody.applicationid}';`;
-  const { code, rows } = await performQuery(
-    client,
-    updateApplicationUserQuery
-  );
+  let query: QueryProps = {
+    name: "appUserUpdateQuery",
+    text: "UPDATE applicationusers SET isuser=$1, isadmin=$2 WHERE userid=$3 AND applicationid=$4;",
+    values: [
+      String(reqBody.isuser),
+      String(reqBody.isadmin),
+      reqBody.userid,
+      reqBody.applicationid,
+    ],
+  };
+  const { code, rows } = await performQuery(client, query);
 
   res.status(code);
   next();
@@ -78,8 +95,12 @@ export const deleteApplicationUser = async (
   const client = req.body.client;
   var reqBody = req.body.applicationuser as ApplicationUser;
 
-  const deleteUserQuery = `DELETE FROM applicationusers WHERE userid='${reqBody.userid}' AND applicationid='${reqBody.applicationid}';`;
-  const { code, rows } = await performQuery(client, deleteUserQuery);
+  let query: QueryProps = {
+    name: "appUserDeleteQuery",
+    text: "DELETE FROM applicationusers WHERE userid=$1 AND applicationid=$2;",
+    values: [reqBody.userid, reqBody.applicationid],
+  };
+  const { code, rows } = await performQuery(client, query);
 
   res.status(code);
   next();

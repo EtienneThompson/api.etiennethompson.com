@@ -14,6 +14,12 @@ export const connectToDatabase = async (): Promise<Client> => {
   return client;
 };
 
+export interface QueryProps {
+  name?: string;
+  text: string;
+  values: string[];
+}
+
 /**
  * TODO: Perform the query, retrying on failed database connections.
  * @param client the database to perform the query on.
@@ -22,7 +28,7 @@ export const connectToDatabase = async (): Promise<Client> => {
  */
 export const performQuery = async (
   client: Client,
-  query: string
+  query: QueryProps
 ): Promise<QueryResponse> => {
   const { code, rows } = await makeSingleQuery(client, query);
   return { code, rows };
@@ -36,7 +42,7 @@ export const performQuery = async (
  */
 const makeSingleQuery = async (
   client: Client,
-  query: string
+  query: QueryProps
 ): Promise<QueryResponse> => {
   const response = await client.query(query);
 
