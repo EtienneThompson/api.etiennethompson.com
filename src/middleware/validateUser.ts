@@ -58,7 +58,7 @@ export const validateUser = async (req: Request, res: Response, next: any) => {
 
   query = {
     name: "validateGetApplicationUsersQuery",
-    text: "SELECT * FROM applicationusers WHERE userid=$1 AND userid=$2;",
+    text: "SELECT * FROM applicationusers WHERE applicationid=$1 AND userid=$2;",
     values: [reqBody.appid, userid],
   };
   ({ code, rows } = await performQuery(client, query));
