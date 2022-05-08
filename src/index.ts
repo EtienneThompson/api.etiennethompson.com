@@ -3,6 +3,7 @@ import { createDatabaseConnection } from "./middleware/createDatabaseConnection"
 import { closeDatabaseConnection } from "./middleware/closeDatabaseConnection";
 import { validateUser } from "./middleware/validateUser";
 import { loginHandler } from "./login";
+import * as dashboard from "./admin/Dashboard";
 import * as users from "./admin/Users";
 import * as applications from "./admin/Applications";
 import * as applicationUsers from "./admin/ApplicationUsers";
@@ -42,6 +43,7 @@ app.get("/", handler);
 app.post("/login", loginHandler);
 
 // Admin User routes.
+app.get("/admin/dashboard/count", dashboard.getTableCounts);
 app.get("/admin/users", users.getUsers);
 app.post("/admin/users/create", users.createUser);
 app.put("/admin/users/update", users.updateUser);
