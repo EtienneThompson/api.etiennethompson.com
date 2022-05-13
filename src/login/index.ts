@@ -12,6 +12,7 @@ export const loginHandler = async (req: Request, res: Response, next: any) => {
   // Verify that the user exists and get the user's client id.
   let clientId: string = "";
   let userId: string = "";
+  let session_expiration: string = "";
   let query: QueryProps = {
     name: "loginGetUserQuery",
     text: "SELECT * FROM users WHERE username=$1 AND password=$2;",
@@ -22,6 +23,7 @@ export const loginHandler = async (req: Request, res: Response, next: any) => {
     const entry = rows[0] as UserEntry;
     clientId = entry.clientid;
     userId = entry.userid;
+    session_expiration = entry.session_expiration;
   } else {
     // No results, return an error message.
     res.status(404);
@@ -88,25 +90,50 @@ export const loginHandler = async (req: Request, res: Response, next: any) => {
     isAdmin = appUsers.isadmin;
   }
 
-  // Generate a new clientId for the user.
-  const newClientId = uuidv4();
-  const expiration = createExpiration();
-  query = {
-    text: "UPDATE users SET clientid=$1, session_expiration=$2 WHERE userid=$3;",
-    values: [newClientId, expiration, userId],
-  };
-  ({ code, rows } = await performQuery(client, query));
-  if (code !== 200) {
-    res.status(500);
-    res.write(JSON.stringify({ message: "There was an unexpected error. " }));
-    next();
-    return;
+  // Check if the user has a currently valid clientid, if they do, get that
+  // and reset the session expiration.
+  let diff = new Date(session_expiration).getTime() - new Date().getTime();
+  let retClientId: string = "";
+  if (diff < 0) {
+    // Generate a new clientId for the user.
+    retClientId = uuidv4();
+    const expiration = createExpiration();
+    query = {
+      text: "UPDATE users SET clientid=$1, session_expiration=$2 WHERE userid=$3;",
+      values: [retClientId, expiration, userId],
+    };
+    ({ code, rows } = await performQuery(client, query));
+    if (code !== 200) {
+      res.status(500);
+      res.write(
+        JSON.stringify({ message: "There was an unexpected error. " })
+      );
+      next();
+      return;
+    }
+  } else {
+    // Use the existing clientId.
+    retClientId = clientId;
+    const expiration = createExpiration();
+    query = {
+      text: "UPDATE users SET session_expiration=$1 WHERE userid=$2;",
+      values: [expiration, userId],
+    };
+    ({ code, rows } = await performQuery(client, query));
+    if (code != 200) {
+      res.status(500);
+      res.write(
+        JSON.stringify({ message: "There was an unexpected error. " })
+      );
+      next();
+      return;
+    }
   }
 
   res.status(200);
   res.write(
     JSON.stringify({
-      clientId: newClientId,
+      clientId: retClientId,
       redirectUrl: redirectUrl,
       isUser: isUser,
       isAdmin: isAdmin,
