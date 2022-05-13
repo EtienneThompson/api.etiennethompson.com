@@ -34,7 +34,7 @@ export const validateUser = async (req: Request, res: Response, next: any) => {
   let diff = session_expiration.getTime() - currentTime.getTime();
   if (diff < 0) {
     await client.end();
-    res.status(401);
+    res.status(400);
     res.send({ message: "Your session has expired. Please login again." });
   }
 
