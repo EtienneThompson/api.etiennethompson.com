@@ -3,7 +3,12 @@ import { v4 as uuidv4 } from "uuid";
 import aws from "aws-sdk";
 import { QueryProps, performQuery } from "../utils/database";
 import { getCurrentTimeField, createReadableTimeField } from "../utils/date";
-import { CreateRequest } from "./types";
+import {
+  Breadcrumb,
+  BreadcrumbFolder,
+  BreadcrumbItem,
+  CreateRequest,
+} from "./types";
 
 const getUserId = async (client: any, clientid: string): Promise<string> => {
   let query: QueryProps = {
@@ -14,6 +19,80 @@ const getUserId = async (client: any, clientid: string): Promise<string> => {
   let { code, rows } = await performQuery(client, query);
   // The client id was verified in middleware, so this should always return a value.
   return rows[0].userid as string;
+};
+
+const getItemBreadcrumb = async (
+  client: any,
+  userid: string,
+  itemid: string
+): Promise<Breadcrumb | null> => {
+  let query: QueryProps = {
+    name: "inventoryGetItemBreadcrumb",
+    text: "SELECT itemid, name, parent_folder FROM items WHERE itemid=$1 AND owner=$2",
+    values: [itemid, userid],
+  };
+  let { code, rows } = await performQuery(client, query);
+  if (code !== 200) {
+    return null;
+  }
+  let item: BreadcrumbItem = rows[0];
+
+  let breadcrumb = await getFolderBreadcrumb(
+    client,
+    userid,
+    item.parent_folder
+  );
+  if (breadcrumb === null) {
+    return null;
+  }
+
+  breadcrumb.names.push(item.name);
+  breadcrumb.values.push(item.itemid);
+  breadcrumb.types.push("item");
+
+  return breadcrumb;
+};
+
+const getFolderBreadcrumb = async (
+  client: any,
+  userid: string,
+  folderid: string
+): Promise<Breadcrumb | null> => {
+  console.log("getFolderBreadcrumb");
+  let breadcrumb: Breadcrumb = {
+    names: [],
+    values: [],
+    types: [],
+  };
+
+  // Get the first folder for the folderid.
+  let query: QueryProps = {
+    name: "inventoryGetFolderBreadcrumb",
+    text: "SELECT folderid, name, parent_folder FROM folders WHERE folderid=$1 AND owner=$2",
+    values: [folderid, userid],
+  };
+  let { code, rows } = await performQuery(client, query);
+  if (code !== 200) {
+    return null;
+  }
+  let folder: BreadcrumbFolder = rows[0];
+  breadcrumb.names.splice(0, 0, folder.name);
+  breadcrumb.values.splice(0, 0, folder.folderid);
+  breadcrumb.types.splice(0, 0, "folder");
+
+  while (folder.parent_folder) {
+    query.values = [folder.parent_folder, userid];
+    ({ code, rows } = await performQuery(client, query));
+    if (code !== 200) {
+      return null;
+    }
+    folder = rows[0];
+    breadcrumb.names.splice(0, 0, folder.name);
+    breadcrumb.values.splice(0, 0, folder.folderid);
+    breadcrumb.types.splice(0, 0, "folder");
+  }
+
+  return breadcrumb;
 };
 
 const uploadFile = async (fileData: any): Promise<string> => {
@@ -90,10 +169,11 @@ export const getFolder = async (req: Request, res: Response, next: any) => {
   const client = req.body.client;
   let params = req.query;
   let userid = await getUserId(client, params.clientid as string);
+  let folderid = params.folderid as string;
   let query: QueryProps = {
     name: "inventoryGetFolderQuery",
     text: "SELECT folderid, name, picture, description, parent_folder, created, updated FROM folders WHERE folderid=$1 AND owner=$2;",
-    values: [params.folderid as string, userid],
+    values: [folderid, userid],
   };
   let { code, rows } = await performQuery(client, query);
 
@@ -104,6 +184,9 @@ export const getFolder = async (req: Request, res: Response, next: any) => {
     return;
   }
   let folderInfo = rows[0];
+
+  let breadcrumb = await getFolderBreadcrumb(client, userid, folderid);
+  console.log(breadcrumb);
 
   // Get the children folders.
   query = {
@@ -143,7 +226,7 @@ export const getFolder = async (req: Request, res: Response, next: any) => {
   folderInfo.created = createReadableTimeField(folderInfo.created);
   folderInfo.updated = createReadableTimeField(folderInfo.updated);
   res.status(200);
-  res.write(JSON.stringify({ folder: folderInfo }));
+  res.write(JSON.stringify({ folder: folderInfo, breadcrumb: breadcrumb }));
   next();
 };
 
@@ -151,10 +234,11 @@ export const getItem = async (req: Request, res: Response, next: any) => {
   const client = req.body.client;
   let params = req.query;
   let userid = await getUserId(client, params.clientid as string);
+  let itemid = params.itemid as string;
   let query: QueryProps = {
     name: "inventoryGetItemQuery",
     text: "SELECT itemid, name, picture, description, parent_folder, created, updated FROM items WHERE itemid=$1 AND owner=$2;",
-    values: [params.itemid as string, userid],
+    values: [itemid, userid],
   };
   let { code, rows } = await performQuery(client, query);
 
@@ -165,11 +249,14 @@ export const getItem = async (req: Request, res: Response, next: any) => {
     return;
   }
 
+  let breadcrumb = await getItemBreadcrumb(client, userid, itemid);
+  console.log(breadcrumb);
+
   let itemInfo = rows[0];
   itemInfo.created = createReadableTimeField(itemInfo.created);
   itemInfo.updated = createReadableTimeField(itemInfo.updated);
   res.status(200);
-  res.write(JSON.stringify({ item: itemInfo }));
+  res.write(JSON.stringify({ item: itemInfo, breadcrumb: breadcrumb }));
   next();
 };
 
