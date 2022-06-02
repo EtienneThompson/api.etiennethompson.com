@@ -58,7 +58,6 @@ const getFolderBreadcrumb = async (
   userid: string,
   folderid: string
 ): Promise<Breadcrumb | null> => {
-  console.log("getFolderBreadcrumb");
   let breadcrumb: Breadcrumb = {
     names: [],
     values: [],
@@ -186,7 +185,6 @@ export const getFolder = async (req: Request, res: Response, next: any) => {
   let folderInfo = rows[0];
 
   let breadcrumb = await getFolderBreadcrumb(client, userid, folderid);
-  console.log(breadcrumb);
 
   // Get the children folders.
   query = {
@@ -250,7 +248,6 @@ export const getItem = async (req: Request, res: Response, next: any) => {
   }
 
   let breadcrumb = await getItemBreadcrumb(client, userid, itemid);
-  console.log(breadcrumb);
 
   let itemInfo = rows[0];
   itemInfo.created = createReadableTimeField(itemInfo.created);
