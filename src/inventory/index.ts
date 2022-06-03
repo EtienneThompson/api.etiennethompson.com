@@ -574,3 +574,32 @@ export const deleteItem = async (req: Request, res: Response, next: any) => {
   }
   next();
 };
+
+export const moveElement = async (req: Request, res: Response, next: any) => {
+  const client = req.body.client;
+  const moveToId: string = req.body.moveToId;
+  const movingId: string = req.body.movingId;
+  const movingType: string = req.body.movingType;
+  const clientid: string = req.body.clientid;
+
+  let userid = await getUserId(client, clientid);
+  let query: QueryProps = { name: "", text: "", values: [] };
+  if (movingType === "folder") {
+    query = {
+      name: "inventoryMoveFolderQuery",
+      text: "UPDATE folders SET parent_folder=$1 WHERE folderid=$2 AND owner=$3;",
+      values: [moveToId, movingId, userid],
+    };
+  } else {
+    query = {
+      name: "inventoryMovingItemQuery",
+      text: "UPDATE items SET parent_folder=$1 WHERE itemid=$2 AND owner=$3;",
+      values: [moveToId, movingId, userid],
+    };
+  }
+  let { code, rows } = await performQuery(client, query);
+
+  console.log(code);
+  res.status(code);
+  next();
+};

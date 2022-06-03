@@ -84,6 +84,8 @@ app.post("/inventory/item/create", inventory.createItem);
 app.put("/inventory/item/update", inventory.updateItem);
 app.delete("/inventory/item/delete", inventory.deleteItem);
 
+app.post("/inventory/move", inventory.moveElement);
+
 app.use(closeDatabaseConnection);
 
 app.listen(port, () => {
