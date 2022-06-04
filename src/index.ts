@@ -74,6 +74,7 @@ app.delete(
 
 // Inventory routes.
 app.get("/inventory/folder", inventory.getFolder);
+app.get("/inventory/folder/children", inventory.getFolderChildren);
 app.post("/inventory/folder/create", inventory.createFolder);
 app.put("/inventory/folder/update", inventory.updateFolder);
 app.delete("/inventory/folder/delete", inventory.deleteFolder);
@@ -83,6 +84,8 @@ app.get("/inventory/item", inventory.getItem);
 app.post("/inventory/item/create", inventory.createItem);
 app.put("/inventory/item/update", inventory.updateItem);
 app.delete("/inventory/item/delete", inventory.deleteItem);
+
+app.post("/inventory/move", inventory.moveElement);
 
 app.use(closeDatabaseConnection);
 
