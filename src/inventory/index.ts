@@ -94,6 +94,48 @@ const getFolderBreadcrumb = async (
   return breadcrumb;
 };
 
+const getChildren = async (
+  client: any,
+  userid: string,
+  folderid: string
+): Promise<any[]> => {
+  let children: any[] = [];
+  // Get the children folders.
+  let query: QueryProps = {
+    name: "inventoryGetChildrenFolderQuery",
+    text: "SELECT folderid, name, picture FROM folders WHERE parent_folder=$1 AND owner=$2;",
+    values: [folderid, userid],
+  };
+  let { code, rows } = await performQuery(client, query);
+
+  if (code === 200) {
+    let folderChildren = rows.map((child) => {
+      child.type = "folder";
+      child.id = child.folderid;
+      return child;
+    });
+    children = children.concat(folderChildren);
+  }
+
+  // Get the children items.
+  query = {
+    name: "inventoryGetChildrenItemQuery",
+    text: "SELECT itemid, name, picture FROM items WHERE parent_folder=$1 AND owner=$2;",
+    values: [folderid, userid],
+  };
+  ({ code, rows } = await performQuery(client, query));
+  if (code === 200) {
+    let itemChildren = rows.map((child) => {
+      child.type = "item";
+      child.id = child.itemid;
+      return child;
+    });
+    children = children.concat(itemChildren);
+  }
+
+  return children;
+};
+
 const uploadFile = async (fileData: any): Promise<string> => {
   aws.config.update({
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
@@ -186,39 +228,7 @@ export const getFolder = async (req: Request, res: Response, next: any) => {
 
   let breadcrumb = await getFolderBreadcrumb(client, userid, folderid);
 
-  // Get the children folders.
-  query = {
-    name: "inventoryGetChildrenFolderQuery",
-    text: "SELECT folderid, name, picture FROM folders WHERE parent_folder=$1 AND owner=$2;",
-    values: [params.folderid as string, userid],
-  };
-  ({ code, rows } = await performQuery(client, query));
-
-  let children: any[] = [];
-  if (code === 200) {
-    let folderChildren = rows.map((child) => {
-      child.type = "folder";
-      child.id = child.folderid;
-      return child;
-    });
-    children = children.concat(folderChildren);
-  }
-
-  // Get the children items.
-  query = {
-    name: "inventoryGetChildrenItemQuery",
-    text: "SELECT itemid, name, picture FROM items WHERE parent_folder=$1 AND owner=$2;",
-    values: [params.folderid as string, userid],
-  };
-  ({ code, rows } = await performQuery(client, query));
-  if (code === 200) {
-    let itemChildren = rows.map((child) => {
-      child.type = "item";
-      child.id = child.itemid;
-      return child;
-    });
-    children = children.concat(itemChildren);
-  }
+  let children = await getChildren(client, userid, folderid);
 
   folderInfo.children = children;
   folderInfo.created = createReadableTimeField(folderInfo.created);
@@ -254,6 +264,23 @@ export const getItem = async (req: Request, res: Response, next: any) => {
   itemInfo.updated = createReadableTimeField(itemInfo.updated);
   res.status(200);
   res.write(JSON.stringify({ item: itemInfo, breadcrumb: breadcrumb }));
+  next();
+};
+
+export const getFolderChildren = async (
+  req: Request,
+  res: Response,
+  next: any
+) => {
+  const client = req.body.client;
+  let clientid = req.query.clientid as string;
+  let folderid = req.query.folderid as string;
+  let userid = await getUserId(client, clientid);
+
+  let children = await getChildren(client, userid, folderid);
+
+  res.status(200);
+  res.write(JSON.stringify({ children: children }));
   next();
 };
 
@@ -599,7 +626,6 @@ export const moveElement = async (req: Request, res: Response, next: any) => {
   }
   let { code, rows } = await performQuery(client, query);
 
-  console.log(code);
   res.status(code);
   next();
 };

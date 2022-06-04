@@ -74,6 +74,7 @@ app.delete(
 
 // Inventory routes.
 app.get("/inventory/folder", inventory.getFolder);
+app.get("/inventory/folder/children", inventory.getFolderChildren);
 app.post("/inventory/folder/create", inventory.createFolder);
 app.put("/inventory/folder/update", inventory.updateFolder);
 app.delete("/inventory/folder/delete", inventory.deleteFolder);
