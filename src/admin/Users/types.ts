@@ -15,7 +15,7 @@ interface DefaultValues {
   id: string;
   value: string;
   label: string;
-  component: "text" | "select" | "checkbox";
+  component: string;
   editable: boolean;
   options?: SelectOptions[];
 }

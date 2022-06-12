@@ -46,7 +46,12 @@ export const getUsers = async (req: Request, res: Response, next: any) => {
     responseData.elements = rows;
   }
 
-  let allHeaders = ["Username", "Password", "User ID", "Client ID"];
+  let allHeaders = [
+    { text: "Username", field: "username", type: "text" },
+    { text: "Password", field: "password", type: "password" },
+    { text: "User ID", field: "userid", type: "text" },
+    { text: "Client ID", field: "clientid", type: "text" },
+  ];
   // Fields to display in the table.
   responseData.headers = [
     { text: "Username", field: "username" },
@@ -67,10 +72,10 @@ export const getUsers = async (req: Request, res: Response, next: any) => {
 
   allHeaders.map((header) => {
     responseData.defaultValues.push({
-      id: header,
+      id: header.field,
       value: "",
-      label: header,
-      component: "text",
+      label: header.text,
+      component: header.type,
       editable: false,
     });
   });
@@ -81,11 +86,47 @@ export const getUsers = async (req: Request, res: Response, next: any) => {
 };
 
 export const createUser = async (req: Request, res: Response, next: any) => {
-  const client = req.body.client;
-  // insert into users (username, hashedPassword) values ('${username}', '${hashedPassword}');
-  var newUser = req.body.newUser as CreateRequestUsers;
+  // const client = req.body.client;
+  // // insert into users (username, hashedPassword) values ('${username}', '${hashedPassword}');
+  // var newUser = req.body.newUser as CreateRequestUsers;
 
-  // Generate a new user and client Id here too.
+  // // Generate a new user and client Id here too.
+  // const newUserId = uuidv4();
+  // const newClientId = uuidv4();
+  // let expiration = createExpiration();
+
+  // let query: QueryProps = {
+  //   name: "userCreateQuery",
+  //   text: "INSERT INTO users (userid, username, password, clientid, session_expiration) VALUES ($1, $2, $3, $4, $5);",
+  //   values: [
+  //     newUserId,
+  //     newUser.username,
+  //     newUser.password,
+  //     newClientId,
+  //     expiration,
+  //   ],
+  // };
+  // const { code, rows } = await performQuery(client, query);
+
+  // if (code === 200) {
+  //   res.status(200);
+  //   res.write(
+  //     JSON.stringify({
+  //       createdUser: {
+  //         username: newUser.username,
+  //         userid: newUserId,
+  //         clientid: newClientId,
+  //       },
+  //     })
+  //   );
+  // } else {
+  //   res.status(500);
+  // }
+  // next();
+
+  const client = req.body.client;
+  const newElement = req.body.newElement;
+
   const newUserId = uuidv4();
   const newClientId = uuidv4();
   let expiration = createExpiration();
@@ -95,28 +136,17 @@ export const createUser = async (req: Request, res: Response, next: any) => {
     text: "INSERT INTO users (userid, username, password, clientid, session_expiration) VALUES ($1, $2, $3, $4, $5);",
     values: [
       newUserId,
-      newUser.username,
-      newUser.password,
+      newElement[0].value,
+      newElement[1].value,
       newClientId,
       expiration,
     ],
   };
-  const { code, rows } = await performQuery(client, query);
 
-  if (code === 200) {
-    res.status(200);
-    res.write(
-      JSON.stringify({
-        createdUser: {
-          username: newUser.username,
-          userid: newUserId,
-          clientid: newClientId,
-        },
-      })
-    );
-  } else {
-    res.status(500);
-  }
+  console.log(newElement);
+  console.log(query);
+
+  res.status(200);
   next();
 };
 

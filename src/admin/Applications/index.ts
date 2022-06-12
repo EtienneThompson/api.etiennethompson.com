@@ -44,7 +44,11 @@ export const getApplications = async (
     responseData.elements = rows;
   }
 
-  let allHeaders = ["Application ID", "Application Name", "Redirect URL"];
+  let allHeaders = [
+    { text: "Application ID", field: "applicationid" },
+    { text: "Application Name", field: "applicationname" },
+    { text: "Redirect URL", field: "redirecturl" },
+  ];
   // Fields to display in the table.
   responseData.headers = [
     { text: "Application ID", field: "applicationid" },
@@ -65,9 +69,9 @@ export const getApplications = async (
 
   allHeaders.map((header) => {
     responseData.defaultValues.push({
-      id: header,
+      id: header.field,
       value: "",
-      label: header,
+      label: header.text,
       component: "text",
       editable: false,
     });
@@ -83,38 +87,69 @@ export const createApplication = async (
   res: Response,
   next: any
 ) => {
-  const client = req.body.client;
-  // insert into applications (applicationid, applicationname, redirecturl) values (...);
-  var newApplication = req.body.newApplication as CreateApplicationsRequest;
+  // const client = req.body.client;
+  // // insert into applications (applicationid, applicationname, redirecturl) values (...);
+  // var newApplication = req.body.newApplication as CreateApplicationsRequest;
 
-  // Generate a new applicationid.
-  const newApplicationId = uuidv4();
+  // // Generate a new applicationid.
+  // const newApplicationId = uuidv4();
+
+  // let query: QueryProps = {
+  //   name: "appInsertQuery",
+  //   text: "INSERT INTO applications (applicationid, applicationname, redirecturl) VALUES ($1, $2, $3);",
+  //   values: [
+  //     newApplicationId,
+  //     newApplication.applicationname,
+  //     newApplication.redirecturl,
+  //   ],
+  // };
+  // const { code, rows } = await performQuery(client, query);
+
+  // if (code === 200) {
+  //   res.status(200);
+  //   res.write(
+  //     JSON.stringify({
+  //       createdApplication: {
+  //         applicationid: newApplicationId,
+  //         applicationname: newApplication.applicationname,
+  //         redirecturl: newApplication.redirecturl,
+  //       },
+  //     })
+  //   );
+  // } else {
+  //   res.status(500);
+  //   res.write(JSON.stringify({ message: "No applications were created" }));
+  // }
+  // next();
+
+  const client = req.body.client;
+  const newElement = req.body.newElement;
+
+  // Generate a new application id.
+  const newAppId = uuidv4();
+  newElement.filter((field: any) => field.id === "applicationid")[0].value =
+    newAppId;
 
   let query: QueryProps = {
     name: "appInsertQuery",
     text: "INSERT INTO applications (applicationid, applicationname, redirecturl) VALUES ($1, $2, $3);",
-    values: [
-      newApplicationId,
-      newApplication.applicationname,
-      newApplication.redirecturl,
-    ],
+    values: [newElement[0].value, newElement[1].value, newElement[2].value],
   };
   const { code, rows } = await performQuery(client, query);
 
   if (code === 200) {
+    let newApp: Applications = {
+      applicationid: newElement[0].value,
+      applicationname: newElement[1].value,
+      redirecturl: newElement[2].value,
+    };
     res.status(200);
-    res.write(
-      JSON.stringify({
-        createdApplication: {
-          applicationid: newApplicationId,
-          applicationname: newApplication.applicationname,
-          redirecturl: newApplication.redirecturl,
-        },
-      })
-    );
+    res.write(JSON.stringify({ newElement: newApp }));
   } else {
     res.status(500);
-    res.write(JSON.stringify({ message: "No applications were created" }));
+    res.write(
+      JSON.stringify({ message: "Failed to create the application." })
+    );
   }
   next();
 };
