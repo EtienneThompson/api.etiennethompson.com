@@ -20,7 +20,7 @@ interface SelectOptions {
 
 interface DefaultValues {
   id: string;
-  value: string;
+  value: string | boolean;
   label: string;
   component: string;
   editable: boolean;
@@ -39,7 +39,7 @@ interface EditField {
 }
 
 export interface GetResponseData {
-  elements: Users[];
+  elements: any[];
   headers: Header[];
   editableFields: EditField[];
   newFields: Header[];
