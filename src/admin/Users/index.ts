@@ -3,31 +3,13 @@ import { v4 as uuidv4 } from "uuid";
 import { QueryProps, performQuery } from "../../utils/database";
 import { createExpiration } from "../../utils/date";
 import {
-  Users,
-  CreateRequestUsers,
+  ReturnUser,
   UpdateUserRequest,
   DeleteUserRequest,
   GetResponseData,
 } from "./types";
 
 export const getUsers = async (req: Request, res: Response, next: any) => {
-  // const client = req.body.client;
-  // // select username, hashedPassword from users;
-  // let query: QueryProps = {
-  //   name: "userGetQuery",
-  //   text: "SELECT * FROM users;",
-  //   values: [],
-  // };
-  // const { code, rows } = await performQuery(client, query);
-  // if (code === 200 && !rows) {
-  //   res.status(400);
-  //   res.write(JSON.stringify({ message: "no users were found." }));
-  // } else {
-  //   res.status(200);
-  //   res.write(JSON.stringify({ users: rows }));
-  // }
-  // next();
-
   let responseData: GetResponseData = {
     elements: [],
     headers: [],
@@ -86,44 +68,6 @@ export const getUsers = async (req: Request, res: Response, next: any) => {
 };
 
 export const createUser = async (req: Request, res: Response, next: any) => {
-  // const client = req.body.client;
-  // // insert into users (username, hashedPassword) values ('${username}', '${hashedPassword}');
-  // var newUser = req.body.newUser as CreateRequestUsers;
-
-  // // Generate a new user and client Id here too.
-  // const newUserId = uuidv4();
-  // const newClientId = uuidv4();
-  // let expiration = createExpiration();
-
-  // let query: QueryProps = {
-  //   name: "userCreateQuery",
-  //   text: "INSERT INTO users (userid, username, password, clientid, session_expiration) VALUES ($1, $2, $3, $4, $5);",
-  //   values: [
-  //     newUserId,
-  //     newUser.username,
-  //     newUser.password,
-  //     newClientId,
-  //     expiration,
-  //   ],
-  // };
-  // const { code, rows } = await performQuery(client, query);
-
-  // if (code === 200) {
-  //   res.status(200);
-  //   res.write(
-  //     JSON.stringify({
-  //       createdUser: {
-  //         username: newUser.username,
-  //         userid: newUserId,
-  //         clientid: newClientId,
-  //       },
-  //     })
-  //   );
-  // } else {
-  //   res.status(500);
-  // }
-  // next();
-
   const client = req.body.client;
   const newElement = req.body.newElement;
 
@@ -143,10 +87,21 @@ export const createUser = async (req: Request, res: Response, next: any) => {
     ],
   };
 
-  console.log(newElement);
-  console.log(query);
+  const { code, rows } = await performQuery(client, query);
 
-  res.status(200);
+  if (code === 200) {
+    res.status(200);
+    let newUser: ReturnUser = {
+      userid: newUserId,
+      username: newElement[0].value,
+      clientid: newClientId,
+    };
+    res.write(JSON.stringify({ newElement: newUser }));
+  } else {
+    res.status(500);
+    res.write(JSON.stringify({ message: "Failed to create user." }));
+  }
+
   next();
 };
 

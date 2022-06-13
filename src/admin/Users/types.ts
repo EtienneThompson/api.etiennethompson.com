@@ -3,6 +3,13 @@ export interface Users {
   username: string;
   hashedPassword: string;
   clientid: string;
+  expiration: string;
+}
+
+export interface ReturnUser {
+  userid: string;
+  username: string;
+  clientid: string;
 }
 
 interface SelectOptions {
