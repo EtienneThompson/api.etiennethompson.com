@@ -108,26 +108,33 @@ export const updateApplication = async (
   next: any
 ) => {
   const client = req.body.client;
-  // update applications set applicationname = '${appicationname}', redirecturl = '${redirecturl}' where applicationid='${applicationid}';
-  var reqBody = req.body.application as Applications;
+  // // update applications set applicationname = '${appicationname}', redirecturl = '${redirecturl}' where applicationid='${applicationid}';
+  // var reqBody = req.body.application as Applications;
+  var updateElement = req.body.updateElement;
 
   let query: QueryProps = {
     name: "appUpdateQuery",
-    text: "UPDATE applications SET applicationname=$1, redirecturl=$2 WHERE applicationid=$3;",
+    text: "UPDATE applications SET applicationname=$1, redirecturl=$2 WHERE applicationid=$3",
     values: [
-      reqBody.applicationname,
-      reqBody.redirecturl,
-      reqBody.applicationid,
+      updateElement[1].value,
+      updateElement[2].value,
+      updateElement[0].value,
     ],
   };
   const { code, rows } = await performQuery(client, query);
 
   if (code === 200) {
     res.status(200);
+    let udpatedApp: Applications = {
+      applicationid: updateElement[0].value,
+      applicationname: updateElement[1].value,
+      redirecturl: updateElement[2].value,
+    };
+    res.write(JSON.stringify({ updatedElement: udpatedApp }));
   } else {
-    res.status(404);
+    res.status(500);
     res.write(
-      JSON.stringify({ message: "An application for that id does not exist." })
+      JSON.stringify({ message: "The application failed to update." })
     );
   }
   next();
