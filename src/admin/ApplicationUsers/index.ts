@@ -1,30 +1,13 @@
 import { Request, response, Response } from "express";
 import { QueryProps, performQuery } from "../../utils/database";
 import { GetResponseData } from "../Users/types";
-import { ApplicationUser } from "./types";
+import { ApplicationUser, ReturnAppUser } from "./types";
 
 export const getApplicationUsers = async (
   req: Request,
   res: Response,
   next: any
 ) => {
-  // const client = req.body.client;
-
-  // let query: QueryProps = {
-  //   name: "applicationUserGetQuery",
-  //   text: "SELECT * FROM applicationusers;",
-  //   values: [],
-  // };
-  // const { code, rows } = await performQuery(client, query);
-  // if (code === 200 && !rows) {
-  //   res.status(400);
-  //   res.write(JSON.stringify({ message: "No application users were found." }));
-  // } else {
-  //   res.status(200);
-  //   res.write(JSON.stringify({ applicationUsers: rows }));
-  // }
-  // next();
-
   let responseData: GetResponseData = {
     elements: [],
     headers: [],
@@ -143,34 +126,36 @@ export const createApplicationUser = async (
   next: any
 ) => {
   const client = req.body.client;
-  var newApplicationUser = req.body.newApplicationUser as ApplicationUser;
+  const newElement = req.body.newElement;
 
   let query: QueryProps = {
     name: "appUserInsertQuery",
     text: "INSERT INTO applicationusers (userid, applicationid, isuser, isadmin) VALUES ($1, $2, $3, $4);",
     values: [
-      newApplicationUser.userid,
-      newApplicationUser.applicationid,
-      String(newApplicationUser.isuser),
-      String(newApplicationUser.isadmin),
+      newElement[0].value,
+      newElement[1].value,
+      newElement[2].value === "true",
+      newElement[3].value === "true",
     ],
   };
   const { code, rows } = await performQuery(client, query);
 
   if (code === 200) {
     res.status(200);
-    res.write(
-      JSON.stringify({
-        createdApplicationUser: {
-          userid: newApplicationUser.userid,
-          applicationid: newApplicationUser.applicationid,
-          isuser: newApplicationUser.isuser,
-          isadmin: newApplicationUser.isadmin,
-        },
-      })
-    );
+    let newAppUser: ReturnAppUser = {
+      user: newElement[0].options.filter(
+        (opt: any) => opt.id === newElement[0].value
+      )[0].text,
+      application: newElement[1].options.filter(
+        (opt: any) => opt.id === newElement[1].value
+      )[0].text,
+      isuser: newElement[2].value === "true",
+      isadmin: newElement[3].value === "true",
+    };
+    res.write(JSON.stringify({ newElement: newAppUser }));
   } else {
     res.status(500);
+    res.write(JSON.stringify({ message: "Failed to create app user. " }));
   }
   next();
 };
