@@ -108,8 +108,6 @@ export const updateApplication = async (
   next: any
 ) => {
   const client = req.body.client;
-  // // update applications set applicationname = '${appicationname}', redirecturl = '${redirecturl}' where applicationid='${applicationid}';
-  // var reqBody = req.body.application as Applications;
   var updateElement = req.body.updateElement;
 
   let query: QueryProps = {

@@ -107,20 +107,26 @@ export const createUser = async (req: Request, res: Response, next: any) => {
 
 export const updateUser = async (req: Request, res: Response, next: any) => {
   const client = req.body.client;
-  // update users set username = '${username}', hashedPassword = '${hashedPassword}' where userId='${userId}';
-  var reqBody = req.body.user as UpdateUserRequest;
+  var updateElement = req.body.updateElement;
 
   let query: QueryProps = {
     name: "userUpdateQuery",
     text: "UPDATE users SET username=$1 WHERE userid=$2;",
-    values: [reqBody.username, reqBody.userid],
+    values: [updateElement[0].value, updateElement[2].value],
   };
   const { code, rows } = await performQuery(client, query);
 
   if (code === 200) {
     res.status(200);
+    let updateUser: ReturnUser = {
+      userid: updateElement[2].value,
+      username: updateElement[0].value,
+      clientid: updateElement[3].value,
+    };
+    res.write(JSON.stringify({ updatedElement: updateUser }));
   } else {
-    res.status(404);
+    res.status(500);
+    res.write({ message: "The user failed to update." });
   }
   next();
 };
