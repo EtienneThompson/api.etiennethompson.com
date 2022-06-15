@@ -144,22 +144,14 @@ export const deleteApplication = async (
   next: any
 ) => {
   const client = req.body.client;
-  var reqBody = req.body.application as Applications;
+  var deleteElement = req.body.deleteElement;
 
   let query: QueryProps = {
     name: "appDeleteQuery",
     text: "DELETE FROM applications WHERE applicationid=$1;",
-    values: [reqBody.applicationid],
+    values: [deleteElement[0].value],
   };
   const { code, rows } = await performQuery(client, query);
-
-  if (code === 200) {
-    res.status(200);
-  } else {
-    res.status(404);
-    res.write(
-      JSON.stringify({ message: "An application for that id does not exist." })
-    );
-  }
+  res.status(code);
   next();
 };
