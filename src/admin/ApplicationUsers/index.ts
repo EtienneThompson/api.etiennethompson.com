@@ -209,15 +209,21 @@ export const deleteApplicationUser = async (
   next: any
 ) => {
   const client = req.body.client;
-  var reqBody = req.body.applicationuser as ApplicationUser;
+  var deleteElement = req.body.deleteElement;
 
   let query: QueryProps = {
     name: "appUserDeleteQuery",
     text: "DELETE FROM applicationusers WHERE userid=$1 AND applicationid=$2;",
-    values: [reqBody.userid, reqBody.applicationid],
+    values: [
+      deleteElement[0].options.filter(
+        (opt: any) => opt.text === deleteElement[0].value
+      )[0].id,
+      deleteElement[1].options.filter(
+        (opt: any) => opt.text === deleteElement[1].value
+      )[0].id,
+    ],
   };
   const { code, rows } = await performQuery(client, query);
-
   res.status(code);
   next();
 };
