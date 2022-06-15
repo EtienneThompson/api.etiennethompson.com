@@ -126,27 +126,21 @@ export const updateUser = async (req: Request, res: Response, next: any) => {
     res.write(JSON.stringify({ updatedElement: updateUser }));
   } else {
     res.status(500);
-    res.write({ message: "The user failed to update." });
+    res.write(JSON.stringify({ message: "The user failed to update." }));
   }
   next();
 };
 
 export const deleteUser = async (req: Request, res: Response, next: any) => {
   const client = req.body.client;
-  // delete from users where userId = '${userId}';
-  var reqBody = req.body as DeleteUserRequest;
+  var deleteElement = req.body.deleteElement;
 
   let query: QueryProps = {
     name: "userDeleteQuery",
-    text: "DELETE FROM users WHERE userid=$1;",
-    values: [reqBody.userid],
+    text: "DELETE FROM users WHERE userid=$1",
+    values: [deleteElement[2].value],
   };
   const { code, rows } = await performQuery(client, query);
-
-  if (code === 200) {
-    res.status(200);
-  } else {
-    res.status(404);
-  }
+  res.status(code);
   next();
 };

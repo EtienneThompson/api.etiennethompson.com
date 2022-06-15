@@ -1,5 +1,6 @@
 import { Request, response, Response } from "express";
 import { QueryProps, performQuery } from "../../utils/database";
+import { updateUser } from "../Users";
 import { GetResponseData } from "../Users/types";
 import { ApplicationUser, ReturnAppUser } from "./types";
 
@@ -166,21 +167,39 @@ export const updateApplicationUser = async (
   next: any
 ) => {
   const client = req.body.client;
-  var reqBody = req.body.applicationuser as ApplicationUser;
+  var updateElement = req.body.updateElement;
 
   let query: QueryProps = {
     name: "appUserUpdateQuery",
     text: "UPDATE applicationusers SET isuser=$1, isadmin=$2 WHERE userid=$3 AND applicationid=$4;",
     values: [
-      String(reqBody.isuser),
-      String(reqBody.isadmin),
-      reqBody.userid,
-      reqBody.applicationid,
+      updateElement[2].value,
+      updateElement[3].value,
+      updateElement[0].options.filter(
+        (opt: any) => opt.text === updateElement[0].value
+      )[0].id,
+      updateElement[1].options.filter(
+        (opt: any) => opt.text === updateElement[1].value
+      )[0].id,
     ],
   };
   const { code, rows } = await performQuery(client, query);
 
-  res.status(code);
+  if (code === 200) {
+    res.status(200);
+    let updateAppUser: ReturnAppUser = {
+      user: updateElement[0].value,
+      application: updateElement[1].value,
+      isuser: updateElement[2].value,
+      isadmin: updateElement[3].value,
+    };
+    res.write(JSON.stringify({ updatedElement: updateAppUser }));
+  } else {
+    res.status(500);
+    res.write(
+      JSON.stringify({ message: "The application user failed to update." })
+    );
+  }
   next();
 };
 
