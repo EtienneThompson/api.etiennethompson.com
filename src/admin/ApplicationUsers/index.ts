@@ -1,7 +1,6 @@
-import { Request, response, Response } from "express";
+import { Request, Response } from "express";
 import { QueryProps, performQuery } from "../../utils/database";
-import { updateUser } from "../Users";
-import { GetResponseData } from "../Users/types";
+import { AdminGetResponseData } from "../../types";
 import { ApplicationUser, ReturnAppUser } from "./types";
 
 export const getApplicationUsers = async (
@@ -9,7 +8,7 @@ export const getApplicationUsers = async (
   res: Response,
   next: any
 ) => {
-  let responseData: GetResponseData = {
+  let responseData: AdminGetResponseData = {
     elements: [],
     headers: [],
     editableFields: [],

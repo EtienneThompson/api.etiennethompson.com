@@ -1,10 +1,11 @@
-export interface Applications {
+export interface Application {
   applicationid: string;
   applicationname: string;
   redirecturl: string;
 }
 
-export interface CreateApplicationsRequest {
+export interface ReturnApp {
+  applicationid: string;
   applicationname: string;
   redirecturl: string;
 }

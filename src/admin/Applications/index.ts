@@ -1,15 +1,15 @@
 import { Request, Response } from "express";
 import { v4 as uuidv4 } from "uuid";
 import { QueryProps, performQuery } from "../../utils/database";
-import { Applications, CreateApplicationsRequest } from "./types";
-import { GetResponseData } from "../Users/types";
+import { ReturnApp } from "./types";
+import { AdminGetResponseData } from "../../types";
 
 export const getApplications = async (
   req: Request,
   res: Response,
   next: any
 ) => {
-  let responseData: GetResponseData = {
+  let responseData: AdminGetResponseData = {
     elements: [],
     headers: [],
     editableFields: [],
@@ -86,7 +86,7 @@ export const createApplication = async (
   const { code, rows } = await performQuery(client, query);
 
   if (code === 200) {
-    let newApp: Applications = {
+    let newApp: ReturnApp = {
       applicationid: newElement[0].value,
       applicationname: newElement[1].value,
       redirecturl: newElement[2].value,
@@ -123,7 +123,7 @@ export const updateApplication = async (
 
   if (code === 200) {
     res.status(200);
-    let udpatedApp: Applications = {
+    let udpatedApp: ReturnApp = {
       applicationid: updateElement[0].value,
       applicationname: updateElement[1].value,
       redirecturl: updateElement[2].value,

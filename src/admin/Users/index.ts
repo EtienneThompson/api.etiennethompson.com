@@ -1,16 +1,12 @@
-import { Request, response, Response } from "express";
+import { Request, Response } from "express";
 import { v4 as uuidv4 } from "uuid";
 import { QueryProps, performQuery } from "../../utils/database";
 import { createExpiration } from "../../utils/date";
-import {
-  ReturnUser,
-  UpdateUserRequest,
-  DeleteUserRequest,
-  GetResponseData,
-} from "./types";
+import { AdminGetResponseData } from "../../types";
+import { ReturnUser } from "./types";
 
 export const getUsers = async (req: Request, res: Response, next: any) => {
-  let responseData: GetResponseData = {
+  let responseData: AdminGetResponseData = {
     elements: [],
     headers: [],
     editableFields: [],
