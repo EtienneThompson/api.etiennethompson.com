@@ -1,21 +1,13 @@
-export interface Users {
+export interface User {
   userid: string;
   username: string;
   hashedPassword: string;
   clientid: string;
+  expiration: string;
 }
 
-export interface CreateRequestUsers {
-  username: string;
-  password: string;
-}
-
-export interface UpdateUserRequest {
+export interface ReturnUser {
   userid: string;
   username: string;
-  hashedPassword: string;
-}
-
-export interface DeleteUserRequest {
-  userid: string;
+  clientid: string;
 }
