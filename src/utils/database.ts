@@ -45,7 +45,6 @@ const makeSingleQuery = async (
   query: QueryProps
 ): Promise<QueryResponse> => {
   const response = await client.query(query);
-  console.log(response);
 
   if (response) {
     if (response.rowCount > 0 && response.rows.length > 0) {

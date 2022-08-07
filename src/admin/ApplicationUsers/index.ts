@@ -220,7 +220,6 @@ export const updateApplicationUser = async (
         : "",
     ],
   };
-  console.log(query);
   const { code, rows } = await performQuery(client, query);
 
   // Send back the information based on code.
