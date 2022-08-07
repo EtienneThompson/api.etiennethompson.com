@@ -1,13 +1,20 @@
 import { Request, Response } from "express";
 import { QueryProps, performQuery } from "../../utils/database";
-import { AdminGetResponseData } from "../../types";
+import { AdminGetResponseData, DefaultValues } from "../../types";
 import { ApplicationUser, ReturnAppUser } from "./types";
 
+/**
+ * Gets a list of all application users.
+ * @param req The Express request object.
+ * @param res The Express response object.
+ * @param next The next function in the request lifecycle.
+ */
 export const getApplicationUsers = async (
   req: Request,
   res: Response,
   next: any
 ) => {
+  // Template for all the data required.
   let responseData: AdminGetResponseData = {
     elements: [],
     headers: [],
@@ -17,6 +24,7 @@ export const getApplicationUsers = async (
   };
   const client = req.body.client;
 
+  // Get the list of all users.
   let query: QueryProps = {
     name: "userGetQuery",
     text: "SELECT userid, username FROM users;",
@@ -28,6 +36,7 @@ export const getApplicationUsers = async (
     users = rows;
   }
 
+  // Get the list of all applications.
   query = {
     name: "appGetQuery",
     text: "SELECT applicationid, applicationname FROM applications;",
@@ -39,6 +48,7 @@ export const getApplicationUsers = async (
     apps = rows;
   }
 
+  // Get the list of all application users.
   query = {
     name: "appUserGetQuery",
     text: "SELECT userid, applicationid, isuser, isadmin FROM applicationusers;",
@@ -46,6 +56,7 @@ export const getApplicationUsers = async (
   };
   ({ code, rows } = await performQuery(client, query));
 
+  // Construct a list of all app users with actual usernames and app names.
   if (code === 200) {
     rows.map((row: ApplicationUser) => {
       responseData.elements.push({
@@ -87,6 +98,7 @@ export const getApplicationUsers = async (
     { text: "Admin Status", field: "isadmin" },
   ];
 
+  // Set default values with user and application details.
   allHeaders.map((header) => {
     responseData.defaultValues.push({
       id: header.field,
@@ -115,113 +127,155 @@ export const getApplicationUsers = async (
     });
   });
 
-  res.status(200);
-  res.write(JSON.stringify(responseData));
+  res.status(200).write(JSON.stringify(responseData));
   next();
 };
 
+/**
+ * Creates a new application user based on given fields.
+ * @param req The Express request object. Requires the application user fields
+ *    as payload.
+ * @param res The Express response object.
+ * @param next The next function in the request lifecycle.
+ */
 export const createApplicationUser = async (
   req: Request,
   res: Response,
   next: any
 ) => {
   const client = req.body.client;
-  const newElement = req.body.newElement;
+  const newElement = req.body.newElement as DefaultValues[];
 
+  // Construct query to create the new application user.
   let query: QueryProps = {
     name: "appUserInsertQuery",
     text: "INSERT INTO applicationusers (userid, applicationid, isuser, isadmin) VALUES ($1, $2, $3, $4);",
     values: [
-      newElement[0].value,
-      newElement[1].value,
-      newElement[2].value === "true",
-      newElement[3].value === "true",
+      newElement[0].value.toString(),
+      newElement[1].value.toString(),
+      newElement[2].value.toString() === "true",
+      newElement[3].value.toString() === "true",
     ],
   };
   const { code, rows } = await performQuery(client, query);
 
+  // Return data based on query code, setting the user and application based on
+  // the ids.
   if (code === 200) {
-    res.status(200);
     let newAppUser: ReturnAppUser = {
-      user: newElement[0].options.filter(
-        (opt: any) => opt.id === newElement[0].value
-      )[0].text,
-      application: newElement[1].options.filter(
-        (opt: any) => opt.id === newElement[1].value
-      )[0].text,
+      user: newElement[0].options
+        ? newElement[0].options.filter(
+            (opt: any) => opt.id === newElement[0].value
+          )[0].text
+        : "",
+      application: newElement[1].options
+        ? newElement[1].options.filter(
+            (opt: any) => opt.id === newElement[1].value
+          )[0].text
+        : "",
       isuser: newElement[2].value === "true",
       isadmin: newElement[3].value === "true",
     };
-    res.write(JSON.stringify({ newElement: newAppUser }));
+    res.status(200).write(JSON.stringify({ newElement: newAppUser }));
   } else {
-    res.status(500);
-    res.write(JSON.stringify({ message: "Failed to create app user. " }));
+    res
+      .status(500)
+      .write(JSON.stringify({ message: "Failed to create app user. " }));
   }
   next();
 };
 
+/**
+ * Update the fields of an application user based on given fields.
+ * @param req The Express request object. Requires the application user fields
+ *    as payload.
+ * @param res The Express response object.
+ * @param next The next function in the request lifecycle.
+ */
 export const updateApplicationUser = async (
   req: Request,
   res: Response,
   next: any
 ) => {
   const client = req.body.client;
-  var updateElement = req.body.updateElement;
+  var updateElement = req.body.updateElement as DefaultValues[];
 
+  // Construct the query, filtering the given user and application for their
+  // actual id.
   let query: QueryProps = {
     name: "appUserUpdateQuery",
     text: "UPDATE applicationusers SET isuser=$1, isadmin=$2 WHERE userid=$3 AND applicationid=$4;",
     values: [
-      updateElement[2].value,
-      updateElement[3].value,
-      updateElement[0].options.filter(
-        (opt: any) => opt.text === updateElement[0].value
-      )[0].id,
-      updateElement[1].options.filter(
-        (opt: any) => opt.text === updateElement[1].value
-      )[0].id,
+      updateElement[2].value === "true",
+      updateElement[3].value === "true",
+      updateElement[0].options
+        ? updateElement[0].options.filter(
+            (opt: any) => opt.text === updateElement[0].value
+          )[0].id
+        : "",
+      updateElement[1].options
+        ? updateElement[1].options.filter(
+            (opt: any) => opt.text === updateElement[1].value
+          )[0].id
+        : "",
     ],
   };
   const { code, rows } = await performQuery(client, query);
 
+  // Send back the information based on code.
   if (code === 200) {
-    res.status(200);
     let updateAppUser: ReturnAppUser = {
-      user: updateElement[0].value,
-      application: updateElement[1].value,
-      isuser: updateElement[2].value,
-      isadmin: updateElement[3].value,
+      user: updateElement[0].value.toString(),
+      application: updateElement[1].value.toString(),
+      isuser: updateElement[2].value.toString() === "true",
+      isadmin: updateElement[3].value.toString() === "true",
     };
-    res.write(JSON.stringify({ updatedElement: updateAppUser }));
+    res.status(200).write(JSON.stringify({ updatedElement: updateAppUser }));
   } else {
-    res.status(500);
-    res.write(
-      JSON.stringify({ message: "The application user failed to update." })
-    );
+    res
+      .status(500)
+      .write(
+        JSON.stringify({ message: "The application user failed to update." })
+      );
   }
   next();
 };
 
+/**
+ * Delete a given application user.
+ * @param req The Express request object. Requires the application user fields
+ *    as payload.
+ * @param res The Express response object.
+ * @param next The next function in the request lifecycle.
+ */
 export const deleteApplicationUser = async (
   req: Request,
   res: Response,
   next: any
 ) => {
   const client = req.body.client;
-  var deleteElement = req.body.deleteElement;
+  var deleteElement = req.body.deleteElement as DefaultValues[];
 
+  // Construct the query, replacing the user and application fields with their
+  // respective ids.
   let query: QueryProps = {
     name: "appUserDeleteQuery",
     text: "DELETE FROM applicationusers WHERE userid=$1 AND applicationid=$2;",
     values: [
-      deleteElement[0].options.filter(
-        (opt: any) => opt.text === deleteElement[0].value
-      )[0].id,
-      deleteElement[1].options.filter(
-        (opt: any) => opt.text === deleteElement[1].value
-      )[0].id,
+      deleteElement[0].options
+        ? deleteElement[0].options.filter(
+            (opt: any) => opt.text === deleteElement[0].value
+          )[0].id
+        : "",
+      deleteElement[1].options
+        ? deleteElement[1].options.filter(
+            (opt: any) => opt.text === deleteElement[1].value
+          )[0].id
+        : "",
     ],
   };
+
+  // Send back the result of the operation.
   const { code, rows } = await performQuery(client, query);
   res.status(code);
   next();

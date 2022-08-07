@@ -15,7 +15,7 @@ export const loginHandler = async (req: Request, res: Response, next: any) => {
   let session_expiration: string = "";
   let query: QueryProps = {
     name: "loginGetUserQuery",
-    text: "SELECT * FROM users WHERE username=$1 AND password=$2;",
+    text: "SELECT clientid, userid, session_expiration FROM users WHERE username=$1 AND password=$2;",
     values: [reqBody.username, reqBody.hashedPassword],
   };
   let { code, rows } = await performQuery(client, query);
@@ -26,8 +26,9 @@ export const loginHandler = async (req: Request, res: Response, next: any) => {
     session_expiration = entry.session_expiration;
   } else {
     // No results, return an error message.
-    res.status(404);
-    res.write(JSON.stringify({ message: "That user doesn't exist" }));
+    res
+      .status(404)
+      .write(JSON.stringify({ message: "That user doesn't exist" }));
     next();
     return;
   }
@@ -36,7 +37,7 @@ export const loginHandler = async (req: Request, res: Response, next: any) => {
   let redirectUrl: string = "";
   query = {
     name: "loginGetApplicationQuery",
-    text: "SELECT * FROM applications WHERE applicationid=$1;",
+    text: "SELECT redirecturl FROM applications WHERE applicationid=$1;",
     values: [reqBody.appid],
   };
   ({ code, rows } = await performQuery(client, query));
@@ -60,8 +61,9 @@ export const loginHandler = async (req: Request, res: Response, next: any) => {
     }
   } else {
     // No results, return an error message.
-    res.status(404);
-    res.write(JSON.stringify({ message: "That application doesn't exist." }));
+    res
+      .status(404)
+      .write(JSON.stringify({ message: "That application doesn't exist." }));
     next();
     return;
   }
@@ -76,8 +78,7 @@ export const loginHandler = async (req: Request, res: Response, next: any) => {
   let isUser: boolean = false;
   let isAdmin: boolean = false;
   if (code !== 200) {
-    res.status(404);
-    res.write(
+    res.status(404).write(
       JSON.stringify({
         message: "That user is not a member of the given application.",
       })
@@ -104,10 +105,9 @@ export const loginHandler = async (req: Request, res: Response, next: any) => {
     };
     ({ code, rows } = await performQuery(client, query));
     if (code !== 200) {
-      res.status(500);
-      res.write(
-        JSON.stringify({ message: "There was an unexpected error. " })
-      );
+      res
+        .status(500)
+        .write(JSON.stringify({ message: "There was an unexpected error. " }));
       next();
       return;
     }
@@ -121,17 +121,15 @@ export const loginHandler = async (req: Request, res: Response, next: any) => {
     };
     ({ code, rows } = await performQuery(client, query));
     if (code != 200) {
-      res.status(500);
-      res.write(
-        JSON.stringify({ message: "There was an unexpected error. " })
-      );
+      res
+        .status(500)
+        .write(JSON.stringify({ message: "There was an unexpected error. " }));
       next();
       return;
     }
   }
 
-  res.status(200);
-  res.write(
+  res.status(200).write(
     JSON.stringify({
       clientId: retClientId,
       redirectUrl: redirectUrl,
@@ -140,5 +138,4 @@ export const loginHandler = async (req: Request, res: Response, next: any) => {
     })
   );
   next();
-  return;
 };

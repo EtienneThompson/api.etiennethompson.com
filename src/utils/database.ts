@@ -17,7 +17,7 @@ export const connectToDatabase = async (): Promise<Client> => {
 export interface QueryProps {
   name?: string;
   text: string;
-  values: string[];
+  values: (string | boolean)[];
 }
 
 /**

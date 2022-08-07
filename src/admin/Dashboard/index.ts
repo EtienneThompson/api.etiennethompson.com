@@ -2,12 +2,20 @@ import { Request, Response } from "express";
 import { QueryProps, performQuery } from "../../utils/database";
 import { TableNames, TableCount, CountData } from "./types";
 
+/**
+ * Gets the count of all database tables.
+ * @param req The Express request object.
+ * @param res The Express response object.
+ * @param next The next function in the request lifecycle.
+ * @returns void
+ */
 export const getTableCounts = async (
   req: Request,
   res: Response,
   next: any
-) => {
+): Promise<void> => {
   const client = req.body.client;
+  // Query for all database table names in the database.
   let query: QueryProps = {
     name: "getTableNames",
     text: "SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE';",
@@ -28,6 +36,7 @@ export const getTableCounts = async (
     tables: [],
   };
 
+  // Count entries for all the database tables.
   for (let table of tables) {
     query = {
       text: `SELECT COUNT(*) FROM ${table.table_name}`,
@@ -43,7 +52,6 @@ export const getTableCounts = async (
   }
   data.total = total;
 
-  res.status(200);
-  res.write(JSON.stringify(data));
+  res.status(200).write(JSON.stringify(data));
   next();
 };

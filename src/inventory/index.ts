@@ -8,8 +8,18 @@ import {
   BreadcrumbFolder,
   BreadcrumbItem,
   CreateRequest,
+  ElementTypes,
+  FolderChildren,
+  FolderElement,
+  ItemElement,
 } from "./types";
 
+/**
+ * Gets a user's id based on their clientid for future database interactions.
+ * @param client The database client used to query.
+ * @param clientid The client id that is passed to the API endpoint.
+ * @returns The userid for that client id if it exists.
+ */
 const getUserId = async (client: any, clientid: string): Promise<string> => {
   let query: QueryProps = {
     name: "inventoryGetUserIdQuery",
@@ -21,11 +31,19 @@ const getUserId = async (client: any, clientid: string): Promise<string> => {
   return rows[0].userid as string;
 };
 
+/**
+ * Gets breadcrumb data for an item in the database.
+ * @param client The database client used to query.
+ * @param userid The userid the item belongs to.
+ * @param itemid The id of the item to query for.
+ * @returns The Breadcrumb data for that item or null if that item does not exist.
+ */
 const getItemBreadcrumb = async (
   client: any,
   userid: string,
   itemid: string
 ): Promise<Breadcrumb | null> => {
+  // Get the information required for the breadcrumb for the current item.
   let query: QueryProps = {
     name: "inventoryGetItemBreadcrumb",
     text: "SELECT itemid, name, parent_folder FROM items WHERE itemid=$1 AND owner=$2",
@@ -37,6 +55,7 @@ const getItemBreadcrumb = async (
   }
   let item: BreadcrumbItem = rows[0];
 
+  // Get the breadcrumb trail for the parent folder.
   let breadcrumb = await getFolderBreadcrumb(
     client,
     userid,
@@ -46,13 +65,21 @@ const getItemBreadcrumb = async (
     return null;
   }
 
+  // Add the item onto the end of the breadcrumb generated for the parent folder.
   breadcrumb.names.push(item.name);
   breadcrumb.values.push(item.itemid);
-  breadcrumb.types.push("item");
+  breadcrumb.types.push(ElementTypes.Item);
 
   return breadcrumb;
 };
 
+/**
+ * Gets breadcrumb data for the given folder and all it's parent folders.
+ * @param client The database client used to query.
+ * @param userid The userid the folder belongs to.
+ * @param folderid The id of the folder to query for.
+ * @returns
+ */
 const getFolderBreadcrumb = async (
   client: any,
   userid: string,
@@ -74,11 +101,14 @@ const getFolderBreadcrumb = async (
   if (code !== 200) {
     return null;
   }
+  // Add the breadcrumb information to the beginning of the array.
   let folder: BreadcrumbFolder = rows[0];
   breadcrumb.names.splice(0, 0, folder.name);
   breadcrumb.values.splice(0, 0, folder.folderid);
   breadcrumb.types.splice(0, 0, "folder");
 
+  // Get the breadcrumb for each parent folder and add it to the beginning of
+  // the return data.
   while (folder.parent_folder) {
     query.values = [folder.parent_folder, userid];
     ({ code, rows } = await performQuery(client, query));
@@ -94,12 +124,19 @@ const getFolderBreadcrumb = async (
   return breadcrumb;
 };
 
+/**
+ * Get all the children data for a given folder.
+ * @param client The database client used to query.
+ * @param userid The userid the children belong to.
+ * @param folderid The folderid used as the parent folder for all children.
+ * @returns A list of all children elements.
+ */
 const getChildren = async (
   client: any,
   userid: string,
   folderid: string
-): Promise<any[]> => {
-  let children: any[] = [];
+): Promise<FolderChildren[]> => {
+  let children: FolderChildren[] = [];
   // Get the children folders.
   let query: QueryProps = {
     name: "inventoryGetChildrenFolderQuery",
@@ -109,7 +146,7 @@ const getChildren = async (
   let { code, rows } = await performQuery(client, query);
 
   if (code === 200) {
-    let folderChildren = rows.map((child) => {
+    let folderChildren = rows.map((child: FolderChildren) => {
       child.type = "folder";
       child.id = child.folderid;
       return child;
@@ -125,8 +162,8 @@ const getChildren = async (
   };
   ({ code, rows } = await performQuery(client, query));
   if (code === 200) {
-    let itemChildren = rows.map((child) => {
-      child.type = "item";
+    let itemChildren = rows.map((child: FolderChildren) => {
+      child.type = ElementTypes.Item;
       child.id = child.itemid;
       return child;
     });
@@ -136,7 +173,59 @@ const getChildren = async (
   return children;
 };
 
+/**
+ * Gets the currently stored image url for an element.
+ * @param client The database client to query with.
+ * @param userid The id of the user the element is owned by.
+ * @param elementId The id of the element.
+ * @param elementType The type of the element.
+ * @returns The image url or an empty string.
+ */
+const getImageUrl = async (
+  client: any,
+  userid: string,
+  elementId: string,
+  elementType: ElementTypes
+): Promise<string> => {
+  // Construct query to get the current image uploaded for a folder.
+  let query: QueryProps | undefined = undefined;
+  if (elementType === ElementTypes.Folder) {
+    query = {
+      name: "inventoryGetFolderPictureQuery",
+      text: "SELECT picture FROM folders WHERE folderid=$1 AND owner=$2;",
+      values: [elementId, userid],
+    };
+  } else if (elementType === ElementTypes.Item) {
+    query = {
+      name: "inventoryGetItemPictureQuery",
+      text: "SELECT picture FROM items WHERE itemid=$1 AND owner=$2;",
+      values: [elementId, userid],
+    };
+  }
+
+  let code: number;
+  let rows: any[];
+  if (query) {
+    ({ code, rows } = await performQuery(client, query));
+  } else {
+    return "";
+  }
+
+  if (code === 200) {
+    return rows[0].picture as string;
+  } else {
+    return "";
+  }
+};
+
+/**
+ * Upload a file to AWS S3 for persistent storage.
+ * @param fileData The file data to upload. This should come from FormData.
+ * @returns The url for the file that was uploaded, to be stored in the database
+ *    for future reference.
+ */
 const uploadFile = async (fileData: any): Promise<string> => {
+  // Configure the AWS client.
   aws.config.update({
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
     accessKeyId: process.env.AWS_ACCESS_KEY_ID,
@@ -153,11 +242,17 @@ const uploadFile = async (fileData: any): Promise<string> => {
     Key: fileKey,
     Body: fileContent,
   };
+  // Generate the url that the image can be accessed on.
   let imageUrl = `${process.env.AWS_BUCKET_ENDPOINT}/${fileKey}`;
   await s3.upload(params).promise();
   return imageUrl;
 };
 
+/**
+ * Delete a file from AWS S3 for keeping storage manageable.
+ * @param imageUrl The url of the image to delete.
+ * @returns void
+ */
 const deleteFile = async (imageUrl: string): Promise<void> => {
   aws.config.update({
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
@@ -179,14 +274,23 @@ const deleteFile = async (imageUrl: string): Promise<void> => {
   await s3.deleteObject(params).promise();
 };
 
+/**
+ * Returns the root folder of a user's inventory system.
+ * @param req The Express request object.
+ * @param res The Express response object.
+ * @param next The next function in the request lifecycle.
+ * @returns void
+ */
 export const getBaseFolder = async (
   req: Request,
   res: Response,
   next: any
-) => {
+): Promise<void> => {
   const client = req.body.client;
   let params = req.query;
   let userid = await getUserId(client, params.clientid as string);
+  // Get the folder where the parent_folder is null, which is the base folder
+  // of the inventory system for that user.
   let query: QueryProps = {
     name: "inventoryGetBaseFolderQuery",
     text: "SELECT folderid, name, picture FROM folders WHERE owner=$1 AND parent_folder is null;",
@@ -194,19 +298,31 @@ export const getBaseFolder = async (
   };
   const { code, rows } = await performQuery(client, query);
   if (code !== 200) {
+    // The user's inventory system has not been initialized.
     res.status(404);
     res.write(JSON.stringify({ message: "You have no root folder." }));
     next();
     return;
   }
 
-  let folderInfo = rows[0];
+  let folderInfo = rows[0] as FolderElement;
   res.status(200);
   res.write(JSON.stringify({ folder: folderInfo }));
   next();
 };
 
-export const getFolder = async (req: Request, res: Response, next: any) => {
+/**
+ * Gets a provided folder information and children.
+ * @param req The Express request object, with the clientid and folderid as payload.
+ * @param res The Express response object.
+ * @param next The next function in the request lifecycle.
+ * @returns void
+ */
+export const getFolder = async (
+  req: Request,
+  res: Response,
+  next: any
+): Promise<void> => {
   const client = req.body.client;
   let params = req.query;
   let userid = await getUserId(client, params.clientid as string);
@@ -224,21 +340,38 @@ export const getFolder = async (req: Request, res: Response, next: any) => {
     next();
     return;
   }
-  let folderInfo = rows[0];
+  let folderInfo = rows[0] as FolderElement;
 
+  // Get breadcrumb and children information for that folder.
   let breadcrumb = await getFolderBreadcrumb(client, userid, folderid);
-
   let children = await getChildren(client, userid, folderid);
 
   folderInfo.children = children;
-  folderInfo.created = createReadableTimeField(folderInfo.created);
-  folderInfo.updated = createReadableTimeField(folderInfo.updated);
+  // Convert the dates into readable dates.
+  if (folderInfo.created) {
+    folderInfo.created = createReadableTimeField(new Date(folderInfo.created));
+  }
+  if (folderInfo.updated) {
+    folderInfo.updated = createReadableTimeField(new Date(folderInfo.updated));
+  }
+
   res.status(200);
   res.write(JSON.stringify({ folder: folderInfo, breadcrumb: breadcrumb }));
   next();
 };
 
-export const getItem = async (req: Request, res: Response, next: any) => {
+/**
+ * Gets an individual item from the user's inventory.
+ * @param req The Express request object, with clientid and itemid as payload.
+ * @param res The Express response object.
+ * @param next The next function in the request lifecycle.
+ * @returns void
+ */
+export const getItem = async (
+  req: Request,
+  res: Response,
+  next: any
+): Promise<void> => {
   const client = req.body.client;
   let params = req.query;
   let userid = await getUserId(client, params.clientid as string);
@@ -259,14 +392,28 @@ export const getItem = async (req: Request, res: Response, next: any) => {
 
   let breadcrumb = await getItemBreadcrumb(client, userid, itemid);
 
-  let itemInfo = rows[0];
-  itemInfo.created = createReadableTimeField(itemInfo.created);
-  itemInfo.updated = createReadableTimeField(itemInfo.updated);
+  // Update the fields appropriately.
+  let itemInfo = rows[0] as ItemElement;
+
+  // Convert the dates into readable times.
+  if (itemInfo.created) {
+    itemInfo.created = createReadableTimeField(new Date(itemInfo.created));
+  }
+  if (itemInfo.updated) {
+    itemInfo.updated = createReadableTimeField(new Date(itemInfo.updated));
+  }
+
   res.status(200);
   res.write(JSON.stringify({ item: itemInfo, breadcrumb: breadcrumb }));
   next();
 };
 
+/**
+ * Gets only the children for a given folder.
+ * @param req The Express request object, with the clientid and folderid as payload.
+ * @param res The Express response object.
+ * @param next The next function in the request lifecycle.
+ */
 export const getFolderChildren = async (
   req: Request,
   res: Response,
@@ -284,6 +431,13 @@ export const getFolderChildren = async (
   next();
 };
 
+/**
+ * Creates a new, empty folder in the user's inventory.
+ * @param req The Express request object, with the folder details as payload.
+ *    Requires a name, description, image, and parent_folder.
+ * @param res The Express response object.
+ * @param next The next function in the request lifecycle.
+ */
 export const createFolder = async (req: Request, res: Response, next: any) => {
   const client = req.body.client;
   // insert into folders (folderid, name, description, owner, picture, parent_folder, created, updated) VALUES (...);
@@ -291,14 +445,17 @@ export const createFolder = async (req: Request, res: Response, next: any) => {
   const clientid = req.body.clientid;
 
   let userid = await getUserId(client, clientid);
+  // Generate unique id and current time for the other fields of a folder.
   let newFolderId = uuidv4();
   let currentTime = getCurrentTimeField();
 
+  // Upload the image if an image was provided and get the url back.
   let imageUrl = "";
   if (req.files) {
     imageUrl = await uploadFile(req.files);
   }
 
+  // Construct the database query.
   let query: QueryProps = {
     name: "inventoryCreateFolderQuery",
     text: "INSERT INTO folders (folderid, name, description, picture, owner, parent_folder, created, updated) VALUES ($1, $2, $3, $4, $5, $6, $7, $8);",
@@ -315,6 +472,7 @@ export const createFolder = async (req: Request, res: Response, next: any) => {
   };
   let { code, rows } = await performQuery(client, query);
 
+  // Send back the information required by the application for the created folder.
   if (code === 200) {
     res.status(200);
     res.write(
@@ -334,6 +492,13 @@ export const createFolder = async (req: Request, res: Response, next: any) => {
   next();
 };
 
+/**
+ * Creates an item in the user's inventory.
+ * @param req The Express request object, with item details as payload.
+ *    Requires name, description, image, and parent_folder.
+ * @param res The Express response object.
+ * @param next The next function in the request lifecycle.
+ */
 export const createItem = async (req: Request, res: Response, next: any) => {
   const client = req.body.client;
   // insert into items (itemid, name, description, picture, owner, parent_folder, created, updated) VALUES (...);
@@ -341,14 +506,17 @@ export const createItem = async (req: Request, res: Response, next: any) => {
   const clientid = req.body.clientid as string;
 
   let userid = await getUserId(client, clientid);
+  // Generate the unique id and current time for the other fields of the item.
   let newItemId = uuidv4();
   let currentTime = getCurrentTimeField();
 
+  // Upload the image if an image was provided and get the url back.
   let imageUrl = "";
   if (req.files) {
     imageUrl = await uploadFile(req.files);
   }
 
+  // Construct the query to create an item entry.
   let query: QueryProps = {
     name: "inventoryCreateItemQuery",
     text: "INSERT INTO items (itemid, name, description, picture, owner, parent_folder, created, updated) VALUES ($1, $2, $3, $4, $5, $6, $7, $8);",
@@ -365,6 +533,7 @@ export const createItem = async (req: Request, res: Response, next: any) => {
   };
   let { code, rows } = await performQuery(client, query);
 
+  // Return useful information to the front end to update it's UI.
   if (code === 200) {
     res.status(200);
     res.write(
@@ -373,7 +542,7 @@ export const createItem = async (req: Request, res: Response, next: any) => {
           id: newItemId,
           name: newItem.name,
           picture: imageUrl,
-          type: "item",
+          type: ElementTypes.Item,
         },
       })
     );
@@ -384,19 +553,26 @@ export const createItem = async (req: Request, res: Response, next: any) => {
   next();
 };
 
+/**
+ * Update a folder's details.
+ * @param req The Express request object, with folder details as payload.
+ *    Requires name, description, and image.
+ * @param res The Express response object.
+ * @param next The next function in the request lifecycle.
+ */
 export const updateFolder = async (req: Request, res: Response, next: any) => {
   const client = req.body.client;
   const clientid: string = req.body.clientid;
   var reqBody = req.body;
 
+  // Construct query to get the current image uploaded for a folder.
   let userid = await getUserId(client, clientid);
-  let query: QueryProps = {
-    name: "inventoryGetFolderPictureQuery",
-    text: "SELECT picture FROM folders WHERE folderid=$1 AND owner=$2;",
-    values: [reqBody.id, userid],
-  };
-  let { code, rows } = await performQuery(client, query);
-  let currentPicture = rows[0].picture as string;
+  let currentPicture = await getImageUrl(
+    client,
+    userid,
+    reqBody.id,
+    ElementTypes.Folder
+  );
 
   let updatedImageUrl = "";
   if (
@@ -414,7 +590,8 @@ export const updateFolder = async (req: Request, res: Response, next: any) => {
     updatedImageUrl = await uploadFile(req.files);
   }
 
-  let updateFolderQuery;
+  // Construct the update folder query, based on if an image was uploaded or not.
+  let query: QueryProps;
   let updatedTime = getCurrentTimeField();
   let currentDate = new Date();
   if (updatedImageUrl) {
@@ -443,11 +620,12 @@ export const updateFolder = async (req: Request, res: Response, next: any) => {
       ],
     };
   }
-  ({ code, rows } = await performQuery(client, query));
+  let { code, rows } = await performQuery(client, query);
 
   // Determine which picture to send to the user.
   let returnImageUrl = updatedImageUrl ? updatedImageUrl : currentPicture;
 
+  // Send the updated information back to the user that they don't already have.
   res.status(code);
   res.write(
     JSON.stringify({
@@ -458,33 +636,43 @@ export const updateFolder = async (req: Request, res: Response, next: any) => {
   next();
 };
 
+/**
+ * Update an item's details, and uploads new image if applicable.
+ * @param req The Express request object, with item details as payload.
+ *    Requires name, description, and image.
+ * @param res The Express response object.
+ * @param next The next function in the request lifecycle.
+ */
 export const updateItem = async (req: Request, res: Response, next: any) => {
   const client = req.body.client;
   const clientid: string = req.body.clientid;
   var reqBody = req.body;
 
+  // Get the current image url for the item.
   let userid = await getUserId(client, clientid);
-  let query: QueryProps = {
-    name: "inventoryGetItemPictureQuery",
-    text: "SELECT picture FROM items WHERE itemid=$1 AND owner=$2;",
-    values: [reqBody.id, userid],
-  };
-  let { code, rows } = await performQuery(client, query);
-  let currentPicture = rows[0].picture;
+  let currentPicture = await getImageUrl(
+    client,
+    userid,
+    reqBody.id,
+    ElementTypes.Item
+  );
 
   let updatedImageUrl = "";
   if (
     req.files &&
     currentPicture.includes(`${process.env.AWS_BUCKET_ENDPOINT}`)
   ) {
+    // We're trying to upload a new image and one already existed, so delete
+    // the old one.
     await deleteFile(currentPicture);
   }
 
   if (req.files) {
+    // We're uploading a new image.
     updatedImageUrl = await uploadFile(req.files);
   }
 
-  let updateItemQuery;
+  let query: QueryProps;
   let updatedTime = getCurrentTimeField();
   let currentDate = new Date();
   // Determine SQL command based on it image was uploaded or not.
@@ -514,11 +702,12 @@ export const updateItem = async (req: Request, res: Response, next: any) => {
       ],
     };
   }
-  ({ code, rows } = await performQuery(client, query));
+  let { code, rows } = await performQuery(client, query);
 
   // Determine what image to return.
   let returnImageUrl = updatedImageUrl ? updatedImageUrl : currentPicture;
 
+  // Return information front end doesn't already have.
   res.status(code);
   res.write(
     JSON.stringify({
@@ -529,27 +718,33 @@ export const updateItem = async (req: Request, res: Response, next: any) => {
   next();
 };
 
+/**
+ * Deletes a given folder from the system.
+ * @param req The Express request object, with the folder id as payload.
+ * @param res The Express response object.
+ * @param next The next function in the request lifecycle.
+ */
 export const deleteFolder = async (req: Request, res: Response, next: any) => {
   const client = req.body.client;
-  // delete from folders where folderid='${folderid}' and owner='${userid}'
   const folderid: string = req.body.folderid;
   const clientid: string = req.body.clientid;
 
+  // Get the current image url uploaded for the folder.
   let userid = await getUserId(client, clientid);
-  let query: QueryProps = {
-    name: "inventoryGetFolderPictureQuery",
-    text: "SELECT picture FROM folders WHERE folderid=$1 AND owner=$2;",
-    values: [folderid, userid],
-  };
-  let { code, rows } = await performQuery(client, query);
-  let currentPicture = rows[0].picture;
+  let currentPicture = await getImageUrl(
+    client,
+    userid,
+    folderid,
+    ElementTypes.Folder
+  );
 
-  query = {
+  // Construct the query to delete the folder.
+  let query: QueryProps = {
     name: "inventoryDeleteFolderQuery",
     text: "DELETE FROM folders WHERE folderid=$1 AND owner=$2;",
     values: [folderid, userid],
   };
-  ({ code, rows } = await performQuery(client, query));
+  let { code, rows } = await performQuery(client, query);
 
   if (code === 200) {
     // Only delete the file in AWS if deletion from database was successful.
@@ -566,26 +761,33 @@ export const deleteFolder = async (req: Request, res: Response, next: any) => {
   next();
 };
 
+/**
+ * Delete a given item from the system.
+ * @param req The Express request object, with the item id as payload.
+ * @param res The Express response object.
+ * @param next The next function in the request lifecycle.
+ */
 export const deleteItem = async (req: Request, res: Response, next: any) => {
   const client = req.body.client;
   const itemid: string = req.body.itemid;
   const clientid: string = req.body.clientid;
 
+  // Get the current image url uploaded for the item.
   let userid = await getUserId(client, clientid);
-  let query: QueryProps = {
-    name: "inventoryGetItemPictureQuery",
-    text: "SELECT picture FROM items WHERE itemid=$1 AND owner=$2;",
-    values: [itemid, userid],
-  };
-  let { code, rows } = await performQuery(client, query);
-  let currentPicture = rows[0].picture;
+  let currentPicture = await getImageUrl(
+    client,
+    userid,
+    itemid,
+    ElementTypes.Item
+  );
 
-  query = {
+  // Construct the query for deleting the item.
+  let query: QueryProps = {
     name: "inventoryDeleteItemPicture",
     text: "DELETE FROM items WHERE itemid=$1 AND owner=$2;",
     values: [itemid, userid],
   };
-  ({ code, rows } = await performQuery(client, query));
+  let { code, rows } = await performQuery(client, query);
 
   if (code === 200) {
     // Only delete the file in AWS if deletion from database was successful.
@@ -602,6 +804,14 @@ export const deleteItem = async (req: Request, res: Response, next: any) => {
   next();
 };
 
+/**
+ * Move an element from one folder to another.
+ * @param req The Express request object, with move data as payload.
+ *    Requires the id of the element to move to, the id of the element that
+ *    will be moved, and the type of the element that is being moved.
+ * @param res The Express response object.
+ * @param next The next function in the request lifecycle.
+ */
 export const moveElement = async (req: Request, res: Response, next: any) => {
   const client = req.body.client;
   const moveToId: string = req.body.moveToId;
@@ -611,6 +821,7 @@ export const moveElement = async (req: Request, res: Response, next: any) => {
 
   let userid = await getUserId(client, clientid);
   let query: QueryProps = { name: "", text: "", values: [] };
+  // Construct the query for moving the item based on type.
   if (movingType === "folder") {
     query = {
       name: "inventoryMoveFolderQuery",
