@@ -17,7 +17,7 @@ export const connectToDatabase = async (): Promise<Client> => {
 export interface QueryProps {
   name?: string;
   text: string;
-  values: string[];
+  values: (string | boolean)[];
 }
 
 /**
@@ -45,6 +45,7 @@ const makeSingleQuery = async (
   query: QueryProps
 ): Promise<QueryResponse> => {
   const response = await client.query(query);
+  console.log(response);
 
   if (response) {
     if (response.rowCount > 0 && response.rows.length > 0) {
