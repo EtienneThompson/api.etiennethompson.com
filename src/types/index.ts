@@ -22,7 +22,7 @@ interface SelectOptions {
   text: string;
 }
 
-interface DefaultValues {
+export interface DefaultValues {
   id: string;
   value: string | boolean;
   label: string;
