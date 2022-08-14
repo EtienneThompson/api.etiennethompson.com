@@ -5,6 +5,7 @@ import { validateUser } from "./middleware/validateUser";
 import { loginHandler } from "./login";
 import * as dashboard from "./admin/Dashboard";
 import * as users from "./admin/Users";
+import * as mockUsers from "./admin/Users/mocks";
 import * as applications from "./admin/Applications";
 import * as applicationUsers from "./admin/ApplicationUsers";
 import * as inventory from "./inventory";
@@ -18,6 +19,21 @@ const port = process.env.PORT || "4000";
 
 const handler = (req: Request, res: Response) => {
   return res.send("Hello world!");
+};
+
+const requestFactory = async (
+  req: Request,
+  res: Response,
+  next: any,
+  real: (req: Request, res: Response, next: any) => void,
+  mock: (req: Request, res: Response, next: any) => void
+) => {
+  if (req.body.isMock) {
+    await mock(req, res, next);
+  } else {
+    await real(req, res, next);
+  }
+  next();
 };
 
 // Allow requests from this endpoint.
@@ -46,10 +62,50 @@ app.post("/login", loginHandler);
 
 // Admin User routes.
 app.get("/admin/dashboard/count", dashboard.getTableCounts);
-app.get("/admin/users", users.getUsers);
-app.post("/admin/users/create", users.createUser);
-app.put("/admin/users/update", users.updateUser);
-app.delete("/admin/users/delete", users.deleteUser);
+app.get(
+  "/admin/users",
+  async (req: Request, res: Response, next: any) =>
+    await requestFactory(
+      req,
+      res,
+      next,
+      users.getUsers,
+      mockUsers.mockGetUsers
+    )
+);
+app.post(
+  "/admin/users/create",
+  async (req: Request, res: Response, next: any) =>
+    await requestFactory(
+      req,
+      res,
+      next,
+      users.createUser,
+      mockUsers.mockCreateUser
+    )
+);
+app.put(
+  "/admin/users/update",
+  async (req: Request, res: Response, next: any) =>
+    await requestFactory(
+      req,
+      res,
+      next,
+      users.updateUser,
+      mockUsers.mockUpdateUser
+    )
+);
+app.delete(
+  "/admin/users/delete",
+  async (req: Request, res: Response, next: any) =>
+    await requestFactory(
+      req,
+      res,
+      next,
+      users.deleteUser,
+      mockUsers.mockDeleteUser
+    )
+);
 
 // Admin Applications routes.
 app.get("/admin/applications", applications.getApplications);

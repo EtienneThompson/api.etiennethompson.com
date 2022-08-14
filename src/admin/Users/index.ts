@@ -70,7 +70,7 @@ export const getUsers = async (req: Request, res: Response, next: any) => {
   });
 
   res.status(200).write(JSON.stringify(responseData));
-  next();
+  // next();
 };
 
 /**
@@ -119,7 +119,7 @@ export const createUser = async (req: Request, res: Response, next: any) => {
       .write(JSON.stringify({ message: "Failed to create user." }));
   }
 
-  next();
+  // next();
 };
 
 /**
@@ -154,7 +154,6 @@ export const updateUser = async (req: Request, res: Response, next: any) => {
       .status(500)
       .write(JSON.stringify({ message: "The user failed to update." }));
   }
-  next();
 };
 
 /**
@@ -176,5 +175,4 @@ export const deleteUser = async (req: Request, res: Response, next: any) => {
   const { code, rows } = await performQuery(client, query);
   // Return the result of the delete query.
   res.status(code);
-  next();
 };

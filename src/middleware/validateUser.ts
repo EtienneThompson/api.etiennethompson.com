@@ -17,14 +17,15 @@ export const validateUser = async (req: Request, res: Response, next: any) => {
   // Validate that the given clientid is a user.
   let query: QueryProps = {
     name: "validateGetUserQuery",
-    text: "SELECT * FROM users WHERE clientid=$1;",
+    text: "SELECT userid, session_expiration FROM users WHERE clientid=$1;",
     values: [reqBody.clientid],
   };
   let { code, rows } = await performQuery(client, query);
   if (code !== 200) {
     await client.end();
-    res.status(401);
-    res.send({ message: "You are not a valid user of etiennethompson.com." });
+    res
+      .status(401)
+      .send({ message: "You are not a valid user of etiennethompson.com." });
     return;
   }
 
@@ -34,8 +35,9 @@ export const validateUser = async (req: Request, res: Response, next: any) => {
   let diff = session_expiration.getTime() - currentTime.getTime();
   if (diff < 0) {
     await client.end();
-    res.status(400);
-    res.send({ message: "Your session has expired. Please login again." });
+    res
+      .status(400)
+      .send({ message: "Your session has expired. Please login again." });
   }
 
   let userid = (rows[0] as UserEntry).userid;
@@ -49,8 +51,7 @@ export const validateUser = async (req: Request, res: Response, next: any) => {
 
   if (code !== 200) {
     await client.end();
-    res.status(401);
-    res.send({
+    res.status(401).send({
       message: "That is not a valid application of etiennethompson.com.",
     });
     return;
@@ -65,10 +66,14 @@ export const validateUser = async (req: Request, res: Response, next: any) => {
 
   if (code !== 200) {
     await client.end();
-    res.status(401);
-    res.send({ message: "You are not a user of that application." });
+    res
+      .status(401)
+      .send({ message: "You are not a user of that application." });
     return;
   }
+
+  req.body.isMock = !(rows[0].isuser || rows[0].isadmin);
+  console.log("isMock = " + req.body.isMock);
 
   next();
 };
