@@ -9,6 +9,7 @@ import * as mockUsers from "./admin/Users/mocks";
 import * as applications from "./admin/Applications";
 import * as mockApplications from "./admin/Applications/mocks";
 import * as applicationUsers from "./admin/ApplicationUsers";
+import * as mockApplicationUsers from "./admin/ApplicationUsers/mocks";
 import * as inventory from "./inventory";
 
 require("dotenv").config();
@@ -155,18 +156,49 @@ app.delete(
 );
 
 // Admin ApplicationUsers routes.
-app.get("/admin/applicationusers", applicationUsers.getApplicationUsers);
+app.get(
+  "/admin/applicationusers",
+  async (req: Request, res: Response, next: any) =>
+    await requestFactory(
+      req,
+      res,
+      next,
+      applicationUsers.getApplicationUsers,
+      mockApplicationUsers.mockGetApplicationUsers
+    )
+);
 app.post(
   "/admin/applicationusers/create",
-  applicationUsers.createApplicationUser
+  async (req: Request, res: Response, next: any) =>
+    await requestFactory(
+      req,
+      res,
+      next,
+      applicationUsers.createApplicationUser,
+      mockApplicationUsers.mockCreateApplicationUser
+    )
 );
 app.put(
   "/admin/applicationusers/update",
-  applicationUsers.updateApplicationUser
+  async (req: Request, res: Response, next: any) =>
+    await requestFactory(
+      req,
+      res,
+      next,
+      applicationUsers.updateApplicationUser,
+      mockApplicationUsers.mockUpdateApplicationuser
+    )
 );
 app.delete(
   "/admin/applicationusers/delete",
-  applicationUsers.deleteApplicationUser
+  async (req: Request, res: Response, next: any) =>
+    await requestFactory(
+      req,
+      res,
+      next,
+      applicationUsers.deleteApplicationUser,
+      mockApplicationUsers.mockDeleteApplicationUser
+    )
 );
 
 // Inventory routes.

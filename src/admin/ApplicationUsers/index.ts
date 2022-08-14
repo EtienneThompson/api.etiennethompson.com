@@ -128,7 +128,6 @@ export const getApplicationUsers = async (
   });
 
   res.status(200).write(JSON.stringify(responseData));
-  next();
 };
 
 /**
@@ -182,7 +181,6 @@ export const createApplicationUser = async (
       .status(500)
       .write(JSON.stringify({ message: "Failed to create app user. " }));
   }
-  next();
 };
 
 /**
@@ -238,7 +236,6 @@ export const updateApplicationUser = async (
         JSON.stringify({ message: "The application user failed to update." })
       );
   }
-  next();
 };
 
 /**
@@ -278,5 +275,4 @@ export const deleteApplicationUser = async (
   // Send back the result of the operation.
   const { code, rows } = await performQuery(client, query);
   res.status(code);
-  next();
 };
