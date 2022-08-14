@@ -7,6 +7,7 @@ import * as dashboard from "./admin/Dashboard";
 import * as users from "./admin/Users";
 import * as mockUsers from "./admin/Users/mocks";
 import * as applications from "./admin/Applications";
+import * as mockApplications from "./admin/Applications/mocks";
 import * as applicationUsers from "./admin/ApplicationUsers";
 import * as inventory from "./inventory";
 
@@ -108,10 +109,50 @@ app.delete(
 );
 
 // Admin Applications routes.
-app.get("/admin/applications", applications.getApplications);
-app.post("/admin/applications/create", applications.createApplication);
-app.put("/admin/applications/update", applications.updateApplication);
-app.delete("/admin/applications/delete", applications.deleteApplication);
+app.get(
+  "/admin/applications",
+  async (req: Request, res: Response, next: any) =>
+    await requestFactory(
+      req,
+      res,
+      next,
+      applications.getApplications,
+      mockApplications.mockGetApplications
+    )
+);
+app.post(
+  "/admin/applications/create",
+  async (req: Request, res: Response, next: any) =>
+    await requestFactory(
+      req,
+      res,
+      next,
+      applications.createApplication,
+      mockApplications.mockCreateApplication
+    )
+);
+app.put(
+  "/admin/applications/update",
+  async (req: Request, res: Response, next: any) =>
+    await requestFactory(
+      req,
+      res,
+      next,
+      applications.updateApplication,
+      mockApplications.mockUpdateApplication
+    )
+);
+app.delete(
+  "/admin/applications/delete",
+  async (req: Request, res: Response, next: any) =>
+    await requestFactory(
+      req,
+      res,
+      next,
+      applications.deleteApplication,
+      mockApplications.mockDeleteApplication
+    )
+);
 
 // Admin ApplicationUsers routes.
 app.get("/admin/applicationusers", applicationUsers.getApplicationUsers);

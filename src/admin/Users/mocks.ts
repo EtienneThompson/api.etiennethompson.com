@@ -4,7 +4,6 @@ import { AdminGetResponseData, DefaultValues } from "../../types";
 import { ReturnUser } from "./types";
 
 export const mockGetUsers = (req: Request, res: Response, next: any) => {
-  console.log("mockGetUsers");
   let responseData: AdminGetResponseData = {
     elements: [],
     headers: [],
@@ -76,7 +75,6 @@ export const mockCreateUser = async (
   res: Response,
   next: any
 ) => {
-  console.log("mockCreateUser");
   const newElement = req.body.newElement as DefaultValues[];
   let newUserId = uuidv4();
   let newClientId = uuidv4();
@@ -94,7 +92,6 @@ export const mockUpdateUser = async (
   res: Response,
   next: any
 ) => {
-  console.log("mockUpdateUser");
   const updateElement = req.body.updateElement as DefaultValues[];
 
   let updateUser: ReturnUser = {

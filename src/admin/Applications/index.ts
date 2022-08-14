@@ -71,7 +71,6 @@ export const getApplications = async (
   });
 
   res.status(200).write(JSON.stringify(responseData));
-  next();
 };
 
 /**
@@ -117,7 +116,6 @@ export const createApplication = async (
       .status(500)
       .write(JSON.stringify({ message: "Failed to create the application." }));
   }
-  next();
 };
 
 /**
@@ -160,7 +158,6 @@ export const updateApplication = async (
       .status(500)
       .write(JSON.stringify({ message: "The application failed to update." }));
   }
-  next();
 };
 
 /**
@@ -186,5 +183,4 @@ export const deleteApplication = async (
   const { code, rows } = await performQuery(client, query);
   // Return the result of the query.
   res.status(code);
-  next();
 };

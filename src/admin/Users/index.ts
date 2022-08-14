@@ -70,7 +70,6 @@ export const getUsers = async (req: Request, res: Response, next: any) => {
   });
 
   res.status(200).write(JSON.stringify(responseData));
-  // next();
 };
 
 /**
@@ -118,8 +117,6 @@ export const createUser = async (req: Request, res: Response, next: any) => {
       .status(500)
       .write(JSON.stringify({ message: "Failed to create user." }));
   }
-
-  // next();
 };
 
 /**
