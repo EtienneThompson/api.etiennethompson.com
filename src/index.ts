@@ -11,6 +11,7 @@ import * as mockApplications from "./admin/Applications/mocks";
 import * as applicationUsers from "./admin/ApplicationUsers";
 import * as mockApplicationUsers from "./admin/ApplicationUsers/mocks";
 import * as inventory from "./inventory";
+import * as accounting from "./thompsonaccounting";
 
 require("dotenv").config();
 const cors = require("cors");
@@ -215,6 +216,11 @@ app.put("/inventory/item/update", inventory.updateItem);
 app.delete("/inventory/item/delete", inventory.deleteItem);
 
 app.post("/inventory/move", inventory.moveElement);
+
+// Thompson Accounting routes.
+app.get("/thompsonaccounting/clients", accounting.getClientDetails);
+app.get("/thompsonaccounting/clients/new", accounting.getNewClientSchema);
+app.post("/thompsonaccounting/clients/new", accounting.postNewClientDetails);
 
 app.use(closeDatabaseConnection);
 
