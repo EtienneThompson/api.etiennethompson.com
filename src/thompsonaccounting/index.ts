@@ -59,16 +59,28 @@ export const getNewClientSchema = async (
       values: [tableName.column_name],
     };
     ({ code, rows } = await performQuery(client, query));
+    if (code !== 200) {
+      res.status(400);
+      res.write({
+        message: `The auxiliary ${tableName.column_name} table was not found.`,
+      });
+      next();
+      return;
+    }
 
     let fields: DatabaseColumn[] = [];
 
+    // Convert the database schema to the UI schema.
     for (let field of rows) {
-      if (field.column_name.includes("id")) {
+      // Skip any id fields.
+      if (field.column_name.endsWith("id")) {
         continue;
       }
 
+      // Get type and default value based on data type.
       let type: ColumnType;
       let value: any;
+      let options: string[] | undefined;
       switch (field.data_type) {
         case "character varying":
           type = "text";
@@ -85,6 +97,23 @@ export const getNewClientSchema = async (
         case "USER-DEFINED":
           type = "select";
           value = "---";
+
+          // Get the possible values for the user defined enum.
+          query = {
+            name: `get${field.udt_name}Values`,
+            text: `SELECT unnest(enum_range(null::${field.udt_name}));`,
+            values: [],
+          };
+          ({ code, rows } = await performQuery(client, query));
+          if (code !== 200) {
+            res.status(404);
+            res.write({ message: "User defined enum not found in database" });
+            next();
+            return;
+          }
+
+          options = rows.map((row) => row.unnest);
+
           break;
         default:
           type = "text";
@@ -98,6 +127,7 @@ export const getNewClientSchema = async (
         required: field.is_nullable === IsNullable.No,
         type: type,
         value: value,
+        options: options,
       };
 
       fields.push(fieldSchema);
