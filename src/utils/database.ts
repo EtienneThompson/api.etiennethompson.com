@@ -1,12 +1,34 @@
 import { Client } from "pg";
 import { QueryResponse } from "../types";
 
-export const connectToDatabase = async (): Promise<Client> => {
+export const connectToDatabase = async (
+  connectionString: string
+): Promise<Client> => {
   const client = new Client({
-    connectionString: process.env.DATABASE_URL,
+    connectionString: connectionString,
     ssl: {
       rejectUnauthorized: false,
     },
+  });
+
+  await client.connect();
+
+  return client;
+};
+
+export const connectToAWSDatabase = async (
+  host: string,
+  username: string,
+  password: string,
+  database: string,
+  port: number = 5432
+): Promise<Client> => {
+  const client = new Client({
+    host: host,
+    user: username,
+    password: password,
+    database: database,
+    port: port,
   });
 
   await client.connect();
