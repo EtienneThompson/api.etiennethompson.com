@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import { v4 as uuidv4 } from "uuid";
 import { QueryProps, performQuery } from "../utils/database";
 import {
   ClientDetailsTab,
@@ -145,11 +146,77 @@ export const getNewClientSchema = async (
   next();
 };
 
-export const postNewClientDetails = (
+export const postNewClientDetails = async (
   req: Request,
   res: Response,
   next: any
 ) => {
+  const client = req.body.awsClient;
+  const newClientTabs = req.body.formData as ClientDetailsTab[];
+
+  let foreignNames: string[] = ["id"];
+  let foreignKeys: string[] = [uuidv4()];
+  let foreignPlaceholders: string[] = ["$1"];
+  let foreignIndex = 2;
+
+  // Write an entry to each auxiliary table.
+  for (let tabData of newClientTabs) {
+    foreignPlaceholders.push(`$${foreignIndex}`);
+    foreignIndex++;
+    // Get the list of column names and values to insert.
+    let insertNames: string = `${tabData.name}_id, `;
+    let valuePlaceholders: string = "$1, ";
+    let values: (string | boolean)[] = [];
+    let index = 2;
+    for (let fieldData of tabData.fields) {
+      insertNames += fieldData.name + ", ";
+      valuePlaceholders += `$${index}, `;
+      index++;
+      values.push(fieldData.value);
+    }
+    insertNames = insertNames.substring(0, insertNames.length - 2);
+    valuePlaceholders = valuePlaceholders.substring(
+      0,
+      valuePlaceholders.length - 2
+    );
+
+    let tableId = uuidv4();
+    values.splice(0, 0, tableId);
+    foreignNames.push(tabData.name);
+    foreignKeys.push(tableId);
+
+    let query: QueryProps = {
+      name: `insert${tabData.name}Entry`,
+      text: `INSERT INTO ${tabData.name} (${insertNames}) VALUES (${valuePlaceholders});`,
+      values: values,
+    };
+    let { code, rows } = await performQuery(client, query);
+    if (code !== 200) {
+      res.status(500);
+      res.write(
+        JSON.stringify({ message: `Unable to insert into ${tabData.name}.` })
+      );
+      next();
+      return;
+    }
+  }
+
+  // Write the entry to the main clients table.
+  let query: QueryProps = {
+    name: "insertClientEntry",
+    text: `INSERT INTO clients (${foreignNames.join(
+      ", "
+    )}) VALUES (${foreignPlaceholders.join(", ")});`,
+    values: foreignKeys,
+  };
+  let { code, rows } = await performQuery(client, query);
+  if (code !== 200) {
+    res.status(500);
+    res.write(JSON.stringify({ message: "Unable to insert into clients." }));
+    next();
+    return;
+  }
+
   res.status(200);
   res.write("postNewClientDetails");
   next();
