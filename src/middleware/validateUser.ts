@@ -73,7 +73,6 @@ export const validateUser = async (req: Request, res: Response, next: any) => {
   }
 
   req.body.isMock = !(rows[0].isuser || rows[0].isadmin);
-  console.log("isMock = " + req.body.isMock);
 
   next();
 };
