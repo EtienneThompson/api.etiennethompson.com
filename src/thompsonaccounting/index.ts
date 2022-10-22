@@ -159,10 +159,11 @@ export const postNewClientDetails = async (
   let foreignPlaceholders: string[] = ["$1"];
   let foreignIndex = 2;
 
+  // Write an entry to each auxiliary table.
   for (let tabData of newClientTabs) {
     foreignPlaceholders.push(`$${foreignIndex}`);
     foreignIndex++;
-    // Get the list of column names to update.
+    // Get the list of column names and values to insert.
     let insertNames: string = `${tabData.name}_id, `;
     let valuePlaceholders: string = "$1, ";
     let values: (string | boolean)[] = [];
@@ -200,6 +201,7 @@ export const postNewClientDetails = async (
     }
   }
 
+  // Write the entry to the main clients table.
   let query: QueryProps = {
     name: "insertClientEntry",
     text: `INSERT INTO clients (${foreignNames.join(
