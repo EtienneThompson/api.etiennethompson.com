@@ -114,6 +114,9 @@ export const getNewClientSchema = async (
           }
 
           options = rows.map((row) => row.unnest);
+          if (options !== undefined) {
+            options.splice(0, 0, "---");
+          }
 
           break;
         default:
@@ -169,6 +172,20 @@ export const postNewClientDetails = async (
     let values: (string | boolean)[] = [];
     let index = 2;
     for (let fieldData of tabData.fields) {
+      if (
+        (fieldData.required && fieldData.value === "") ||
+        fieldData.value === "---"
+      ) {
+        res.status(400);
+        res.write(
+          JSON.stringify({
+            message: `The required parameter ${fieldData.label} was not set`,
+          })
+        );
+        next();
+        return;
+      }
+
       insertNames += fieldData.name + ", ";
       valuePlaceholders += `$${index}, `;
       index++;
