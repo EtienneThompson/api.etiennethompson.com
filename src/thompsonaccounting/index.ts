@@ -6,6 +6,7 @@ import {
   DatabaseColumn,
   ColumnType,
   IsNullable,
+  InsertedEntry,
 } from "./types";
 
 const capitalizeName = (name: string): string => {
@@ -18,6 +19,29 @@ const capitalizeName = (name: string): string => {
 
   ret_string = ret_string.substring(0, ret_string.length - 1);
   return ret_string;
+};
+
+const deleteInsertedEntries = async (
+  client: any,
+  insertedEntries: InsertedEntry[]
+): Promise<void> => {
+  for (let entry of insertedEntries) {
+    let query: QueryProps = {
+      name: `delete${entry.tableName}Entry`,
+      text: `DELETE FROM ${entry.tableName} WHERE ${entry.tableName}_id = $1`,
+      values: [entry.id],
+    };
+    let { code, rows } = await performQuery(client, query);
+    if (code !== 200) {
+      console.log(
+        `Entry ${entry.id} failed to delete from table ${entry.tableName}`
+      );
+    } else {
+      console.log(
+        `Successfully delete entry ${entry.id} from table ${entry.tableName}`
+      );
+    }
+  }
 };
 
 export const getClientDetails = (req: Request, res: Response, next: any) => {
@@ -157,6 +181,8 @@ export const postNewClientDetails = async (
   const client = req.body.awsClient;
   const newClientTabs = req.body.formData as ClientDetailsTab[];
 
+  const insertedEntries: InsertedEntry[] = [];
+
   let foreignNames: string[] = ["id"];
   let foreignKeys: string[] = [uuidv4()];
   let foreignPlaceholders: string[] = ["$1"];
@@ -176,6 +202,7 @@ export const postNewClientDetails = async (
         (fieldData.required && fieldData.value === "") ||
         fieldData.value === "---"
       ) {
+        await deleteInsertedEntries(client, insertedEntries);
         res.status(400);
         res.write(
           JSON.stringify({
@@ -209,6 +236,7 @@ export const postNewClientDetails = async (
     };
     let { code, rows } = await performQuery(client, query);
     if (code !== 200) {
+      await deleteInsertedEntries(client, insertedEntries);
       res.status(500);
       res.write(
         JSON.stringify({ message: `Unable to insert into ${tabData.name}.` })
@@ -216,6 +244,11 @@ export const postNewClientDetails = async (
       next();
       return;
     }
+
+    insertedEntries.push({
+      tableName: tabData.name,
+      id: tableId,
+    });
   }
 
   // Write the entry to the main clients table.
@@ -228,6 +261,7 @@ export const postNewClientDetails = async (
   };
   let { code, rows } = await performQuery(client, query);
   if (code !== 200) {
+    await deleteInsertedEntries(client, insertedEntries);
     res.status(500);
     res.write(JSON.stringify({ message: "Unable to insert into clients." }));
     next();

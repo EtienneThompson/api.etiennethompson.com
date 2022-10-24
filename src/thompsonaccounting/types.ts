@@ -31,3 +31,8 @@ export enum IsNullable {
   Yes = "YES",
   No = "NO",
 }
+
+export interface InsertedEntry {
+  tableName: string;
+  id: string;
+}
