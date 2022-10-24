@@ -1,4 +1,5 @@
 import express, { Request, Response } from "express";
+import { exceptionLogging } from "./middleware/exceptionLogging";
 import { createDatabaseConnection } from "./middleware/createDatabaseConnection";
 import { closeDatabaseConnection } from "./middleware/closeDatabaseConnection";
 import { validateUser } from "./middleware/validateUser";
@@ -54,6 +55,7 @@ var corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json());
 app.use(fileUpload());
+app.use(exceptionLogging);
 app.use(createDatabaseConnection);
 app.use(validateUser);
 
