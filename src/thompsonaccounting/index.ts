@@ -44,9 +44,170 @@ const deleteInsertedEntries = async (
   }
 };
 
-export const getClientDetails = (req: Request, res: Response, next: any) => {
+export const getClientDetails = async (
+  req: Request,
+  res: Response,
+  next: any
+) => {
+  const client = req.body.awsClient;
+  let clientDetails: ClientDetailsTab[][] = [];
+
+  let query: QueryProps = {
+    name: "getClientSchema",
+    text: "SELECT column_name FROM information_schema.columns WHERE table_name = 'clients';",
+    values: [],
+  };
+  let { code, rows } = await performQuery(client, query);
+
+  if (code !== 200) {
+    res.status(404);
+    res.write(
+      JSON.stringify({ message: "The client database was not found." })
+    );
+    next();
+    return;
+  }
+  // Get all column names other than the id field.
+  let tableNames = rows.slice(1);
+
+  // Get all the entries in the clients database.
+  query = {
+    name: "getClientEntries",
+    text: "SELECT * from clients;",
+    values: [],
+  };
+  ({ code, rows } = await performQuery(client, query));
+  if (code !== 200) {
+    res.status(400);
+    res.write(
+      JSON.stringify({ message: "The clients entries couldn't be fetched." })
+    );
+    next();
+    return;
+  }
+
+  let clientEntries = rows;
+
+  for (let entry of clientEntries) {
+    const clientDetailsTabs: ClientDetailsTab[] = [];
+
+    // Get the schema for each table related to clients.
+    for (let tableName of tableNames) {
+      query = {
+        name: `get${tableName.column_name}Schema`,
+        text: "SELECT column_name, data_type, udt_name, is_nullable FROM information_schema.columns WHERE table_name=$1;",
+        values: [tableName.column_name],
+      };
+      ({ code, rows } = await performQuery(client, query));
+      if (code !== 200) {
+        res.status(400);
+        res.write(
+          JSON.stringify({
+            message: `The auxiliary ${tableName.column_name} table was not found.`,
+          })
+        );
+        next();
+        return;
+      }
+      let tableSchema = rows;
+
+      query = {
+        name: `get${tableName.column_name}Entries`,
+        text: `SELECT * FROM ${tableName.column_name} WHERE ${tableName.column_name}_id = $1`,
+        values: [entry[tableName.column_name]],
+      };
+      ({ code, rows } = await performQuery(client, query));
+      if (code !== 200) {
+        res.status(400);
+        res.write(
+          JSON.stringify({
+            message: `The entries of the ${tableName.column_name} couldn't be fetched.`,
+          })
+        );
+        next();
+        return;
+      }
+      let tableValues = rows[0];
+
+      let fields: DatabaseColumn[] = [];
+
+      let index = 0;
+      // Convert the database schema to the UI schema.
+      for (let field of tableSchema) {
+        // Skip any id fields.
+        if (field.column_name.endsWith("id")) {
+          continue;
+        }
+
+        // Get type and default value based on data type.
+        let type: ColumnType;
+        let value = tableValues[field.column_name];
+        let options: string[] | undefined;
+        switch (field.data_type) {
+          case "character varying":
+            type = "text";
+            break;
+          case "boolean":
+            type = "checkbox";
+            break;
+          case "text":
+            type = "textarea";
+            break;
+          case "USER-DEFINED":
+            type = "select";
+
+            // Get the possible values for the user defined enum.
+            query = {
+              name: `get${field.udt_name}Values`,
+              text: `SELECT unnest(enum_range(null::${field.udt_name}));`,
+              values: [],
+            };
+            ({ code, rows } = await performQuery(client, query));
+            if (code !== 200) {
+              res.status(404);
+              res.write({
+                message: "User defined enum not found in database",
+              });
+              next();
+              return;
+            }
+
+            options = rows.map((row) => row.unnest);
+            if (options !== undefined) {
+              options.splice(0, 0, "---");
+            }
+
+            break;
+          default:
+            type = "text";
+            break;
+        }
+
+        let fieldSchema: DatabaseColumn = {
+          name: field.column_name,
+          label: capitalizeName(field.column_name),
+          required: field.is_nullable === IsNullable.No,
+          type: type,
+          value: value,
+          options: options,
+        };
+        fields.push(fieldSchema);
+
+        index++;
+      }
+
+      clientDetailsTabs.push({
+        name: tableName.column_name,
+        label: capitalizeName(tableName.column_name),
+        fields: fields,
+      });
+    }
+
+    clientDetails.push(clientDetailsTabs);
+  }
+
   res.status(200);
-  res.write("getClientDetails");
+  res.write(JSON.stringify(clientDetails));
   next();
 };
 
@@ -269,6 +430,5 @@ export const postNewClientDetails = async (
   }
 
   res.status(200);
-  res.write("postNewClientDetails");
   next();
 };
