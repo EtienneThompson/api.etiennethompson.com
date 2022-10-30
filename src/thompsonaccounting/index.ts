@@ -7,6 +7,7 @@ import {
   ColumnType,
   IsNullable,
   InsertedEntry,
+  ColumnNameInfo,
 } from "./types";
 
 const capitalizeName = (name: string): string => {
@@ -15,6 +16,17 @@ const capitalizeName = (name: string): string => {
   for (let piece of pieces) {
     piece = piece.charAt(0).toUpperCase() + piece.slice(1);
     ret_string += piece + " ";
+  }
+
+  ret_string = ret_string.substring(0, ret_string.length - 1);
+  return ret_string;
+};
+
+const createColumnName = (name: string): string => {
+  let pieces = name.split(" ");
+  let ret_string: string = "";
+  for (let piece of pieces) {
+    ret_string += piece.toLowerCase() + "_";
   }
 
   ret_string = ret_string.substring(0, ret_string.length - 1);
@@ -425,6 +437,141 @@ export const postNewClientDetails = async (
     await deleteInsertedEntries(client, insertedEntries);
     res.status(500);
     res.write(JSON.stringify({ message: "Unable to insert into clients." }));
+    next();
+    return;
+  }
+
+  res.status(200);
+  next();
+};
+
+export const getAllTabs = async (req: Request, res: Response, next: any) => {
+  const client = req.body.awsClient;
+
+  let query: QueryProps = {
+    name: "getClientSchema",
+    text: "SELECT column_name FROM information_schema.columns WHERE table_name = 'clients';",
+    values: [],
+  };
+  let { code, rows } = await performQuery(client, query);
+
+  if (code !== 200) {
+    res.status(404);
+    res.write(
+      JSON.stringify({ message: "The client database was not found." })
+    );
+    next();
+    return;
+  }
+  // Get all column names other than the id field.
+  let tableNames = rows.slice(1) as ColumnNameInfo[];
+  let tabNames = tableNames.map((name) => capitalizeName(name.column_name));
+
+  res.status(200);
+  res.write(JSON.stringify({ tabs: tabNames }));
+  next();
+};
+
+export const createTab = async (req: Request, res: Response, next: any) => {
+  const client = req.body.awsClient;
+  const tabName = createColumnName(req.body.tabName);
+  const tabNameKey = `${tabName}_id`;
+  const tabEntryId = uuidv4();
+
+  // Create a new database table for the tabs.
+  let query: QueryProps = {
+    name: "createTabQuery",
+    text: `CREATE TABLE ${tabName} (${tabNameKey} VARCHAR(36) PRIMARY KEY);`,
+    values: [],
+  };
+  let { code, rows } = await performQuery(client, query);
+  console.log(code);
+  if (code !== 200) {
+    res.status(400);
+    res.write(JSON.stringify({ message: `Could not create tab ${tabName}.` }));
+    next();
+    return;
+  }
+
+  query = {
+    name: "AddTabColumn",
+    text: `ALTER TABLE clients ADD COLUMN ${tabName} VARCHAR(36) CONSTRAINT clients_${tabName}_fk_${tabNameKey} REFERENCES ${tabName} (${tabNameKey});`,
+    values: [],
+  };
+  ({ code, rows } = await performQuery(client, query));
+  if (code !== 200) {
+    res.status(400);
+    res.write(
+      JSON.stringify({
+        message: `Could not add the tab ${tabName} to clients.`,
+      })
+    );
+    next();
+    return;
+  }
+
+  res.status(200);
+  next();
+};
+
+export const createField = async (req: Request, res: Response, next: any) => {
+  const client = req.body.awsClient;
+  const tabName = req.body.tabName.toLowerCase() as string;
+  const fieldData = req.body.fieldData as DatabaseColumn;
+
+  const fieldName = createColumnName(fieldData.name);
+
+  if (fieldData.type === "select" && !fieldData.options) {
+    res.status(400);
+    res.write(
+      JSON.stringify({ message: "You must provide values for a dropdown." })
+    );
+    next();
+    return;
+  }
+
+  let fieldType: string = "";
+  let defaultValue: string | boolean;
+  switch (fieldData.type) {
+    case "text":
+      fieldType = "VARCHAR(200)";
+      defaultValue = "N/A";
+      break;
+    case "checkbox":
+      fieldType = "BOOLEAN";
+      defaultValue = false;
+      break;
+    case "select":
+      fieldType = fieldName.charAt(0).toUpperCase() + fieldName.substring(1);
+      defaultValue = fieldData.options ? fieldData.options[0] : "";
+      break;
+    default:
+      fieldType = "TEXT";
+      defaultValue = "N/A";
+      break;
+  }
+
+  // if fieldType === "select", then we need to create the enum type first.
+
+  let requiredField = fieldData.required
+    ? `NOT NULL DEFAULT '${defaultValue}'`
+    : "";
+  let queryText = `ALTER TABLE ${tabName} ADD COLUMN ${fieldName} ${fieldType} ${requiredField}`;
+  console.log(queryText);
+
+  let query: QueryProps = {
+    name: `add${fieldName}Column`,
+    text: queryText,
+    values: [],
+  };
+  let { code, rows } = await performQuery(client, query);
+  if (code !== 200) {
+    res.status(400);
+    res.write(
+      JSON.stringify({
+        message: `Failed to add the field ${fieldData.name} to tab ${tabName}`,
+      })
+    );
     next();
     return;
   }
