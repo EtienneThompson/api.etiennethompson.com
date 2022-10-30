@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { v4 as uuidv4 } from "uuid";
 import { QueryProps, performQuery } from "../utils/database";
+import { capitalize, isNullOrWhiteSpace } from "../utils/string";
 import {
   ClientDetailsTab,
   DatabaseColumn,
@@ -14,7 +15,7 @@ const capitalizeName = (name: string): string => {
   let pieces = name.split("_");
   let ret_string: string = "";
   for (let piece of pieces) {
-    piece = piece.charAt(0).toUpperCase() + piece.slice(1);
+    piece = capitalize(piece);
     ret_string += piece + " ";
   }
 
@@ -519,7 +520,19 @@ export const createField = async (req: Request, res: Response, next: any) => {
   const tabName = req.body.tabName.toLowerCase() as string;
   const fieldData = req.body.fieldData as DatabaseColumn;
 
-  const fieldName = createColumnName(fieldData.name);
+  if (isNullOrWhiteSpace(tabName)) {
+    res.status(400);
+    res.write(
+      JSON.stringify({ message: "You must provide a tab to add to." })
+    );
+  }
+
+  if (isNullOrWhiteSpace(fieldData.name)) {
+    res.status(400);
+    res.write(JSON.stringify({ message: "You must provide a field name." }));
+    next();
+    return;
+  }
 
   if (fieldData.type === "select" && !fieldData.options) {
     res.status(400);
@@ -528,6 +541,32 @@ export const createField = async (req: Request, res: Response, next: any) => {
     );
     next();
     return;
+  }
+
+  const fieldName = createColumnName(fieldData.name);
+
+  let enumName: string = "";
+  if (fieldData.type === "select" && fieldData.options) {
+    enumName = capitalize(fieldName);
+    let createEnumQuery = `CREATE TYPE ${enumName} AS ENUM (${fieldData.options?.map(
+      (val) => "'" + val + "'"
+    )});`;
+    console.log(createEnumQuery);
+
+    let enumQuery: QueryProps = {
+      name: `create${enumName}Query`,
+      text: createEnumQuery,
+      values: [],
+    };
+    let { code, rows } = await performQuery(client, enumQuery);
+    if (code !== 200) {
+      res.status(400);
+      res.write(
+        JSON.stringify({ message: `Failed to create the enum ${enumName}` })
+      );
+      next();
+      return;
+    }
   }
 
   let fieldType: string = "";
@@ -542,7 +581,7 @@ export const createField = async (req: Request, res: Response, next: any) => {
       defaultValue = false;
       break;
     case "select":
-      fieldType = fieldName.charAt(0).toUpperCase() + fieldName.substring(1);
+      fieldType = enumName;
       defaultValue = fieldData.options ? fieldData.options[0] : "";
       break;
     default:
@@ -550,8 +589,6 @@ export const createField = async (req: Request, res: Response, next: any) => {
       defaultValue = "N/A";
       break;
   }
-
-  // if fieldType === "select", then we need to create the enum type first.
 
   let requiredField = fieldData.required
     ? `NOT NULL DEFAULT '${defaultValue}'`
