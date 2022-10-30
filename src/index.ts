@@ -225,6 +225,7 @@ app.get("/thompsonaccounting/clients/new", accounting.getNewClientSchema);
 app.post("/thompsonaccounting/clients/new", accounting.postNewClientDetails);
 app.get("/thompsonaccounting/tabs", accounting.getAllTabs);
 app.post("/thompsonaccounting/tabs", accounting.createTab);
+app.get("/thompsonaccounting/fields", accounting.getAllFields);
 app.post("/thompsonaccounting/fields", accounting.createField);
 
 app.use(closeDatabaseConnection);

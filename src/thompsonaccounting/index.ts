@@ -515,6 +515,58 @@ export const createTab = async (req: Request, res: Response, next: any) => {
   next();
 };
 
+export const getAllFields = async (req: Request, res: Response, next: any) => {
+  const client = req.body.awsClient;
+
+  let query: QueryProps = {
+    name: "getClientSchema",
+    text: "SELECT column_name FROM information_schema.columns WHERE table_name = 'clients';",
+    values: [],
+  };
+  let { code, rows } = await performQuery(client, query);
+
+  if (code !== 200) {
+    res.status(404);
+    res.write(
+      JSON.stringify({ message: "The client database was not found." })
+    );
+    next();
+    return;
+  }
+  // Get all column names other than the id field.
+  let tableNames = rows.slice(1) as ColumnNameInfo[];
+  let allFieldNames: string[] = [];
+
+  for (let tableName of tableNames) {
+    query = {
+      name: `get${tableName.column_name}Columns`,
+      text: "SELECT column_name FROM information_schema.columns WHERE table_name=$1",
+      values: [tableName.column_name],
+    };
+    ({ code, rows } = await performQuery(client, query));
+    if (code !== 200) {
+      res.status(404);
+      res.write(
+        JSON.stringify({
+          message: `The ${tableName.column_name} table was not found.`,
+        })
+      );
+      next();
+      return;
+    }
+    console.log(rows);
+
+    let fieldNames = rows.slice(1) as ColumnNameInfo[];
+    allFieldNames = allFieldNames.concat(
+      fieldNames.map((name) => capitalizeName(name.column_name))
+    );
+  }
+
+  res.status(200);
+  res.write(JSON.stringify({ fields: allFieldNames }));
+  next();
+};
+
 export const createField = async (req: Request, res: Response, next: any) => {
   const client = req.body.awsClient;
   const tabName = req.body.tabName.toLowerCase() as string;
@@ -551,7 +603,6 @@ export const createField = async (req: Request, res: Response, next: any) => {
     let createEnumQuery = `CREATE TYPE ${enumName} AS ENUM (${fieldData.options?.map(
       (val) => "'" + val + "'"
     )});`;
-    console.log(createEnumQuery);
 
     let enumQuery: QueryProps = {
       name: `create${enumName}Query`,
