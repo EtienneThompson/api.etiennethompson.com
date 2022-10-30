@@ -106,6 +106,9 @@ export const getClientDetails = async (
 
     // Get the schema for each table related to clients.
     for (let tableName of tableNames) {
+      if (isNullOrWhiteSpace(entry[tableName.column_name])) {
+        continue;
+      }
       query = {
         name: `get${tableName.column_name}Schema`,
         text: "SELECT column_name, data_type, udt_name, is_nullable FROM information_schema.columns WHERE table_name=$1;",
@@ -486,7 +489,6 @@ export const createTab = async (req: Request, res: Response, next: any) => {
     values: [],
   };
   let { code, rows } = await performQuery(client, query);
-  console.log(code);
   if (code !== 200) {
     res.status(400);
     res.write(JSON.stringify({ message: `Could not create tab ${tabName}.` }));
@@ -554,7 +556,6 @@ export const getAllFields = async (req: Request, res: Response, next: any) => {
       next();
       return;
     }
-    console.log(rows);
 
     let fieldNames = rows.slice(1) as ColumnNameInfo[];
     allFieldNames = allFieldNames.concat(
@@ -645,7 +646,6 @@ export const createField = async (req: Request, res: Response, next: any) => {
     ? `NOT NULL DEFAULT '${defaultValue}'`
     : "";
   let queryText = `ALTER TABLE ${tabName} ADD COLUMN ${fieldName} ${fieldType} ${requiredField}`;
-  console.log(queryText);
 
   let query: QueryProps = {
     name: `add${fieldName}Column`,

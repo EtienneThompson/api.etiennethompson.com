@@ -3,7 +3,7 @@ export const isNullOrWhiteSpace = (val: string): boolean => {
     return true;
   }
 
-  if (val.replace("s", "") === "") {
+  if (val.replace(/\s/, "") === "") {
     return true;
   }
 
