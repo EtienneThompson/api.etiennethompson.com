@@ -480,7 +480,6 @@ export const createTab = async (req: Request, res: Response, next: any) => {
   const client = req.body.awsClient;
   const tabName = createColumnName(req.body.tabName);
   const tabNameKey = `${tabName}_id`;
-  const tabEntryId = uuidv4();
 
   // Create a new database table for the tabs.
   let query: QueryProps = {
@@ -507,6 +506,90 @@ export const createTab = async (req: Request, res: Response, next: any) => {
     res.write(
       JSON.stringify({
         message: `Could not add the tab ${tabName} to clients.`,
+      })
+    );
+    next();
+    return;
+  }
+
+  res.status(200);
+  next();
+};
+
+export const updateTabName = async (
+  req: Request,
+  res: Response,
+  next: any
+) => {
+  const client = req.body.awsClient;
+  const currentName = req.body.currentName;
+  const newName = req.body.newName;
+
+  let query: QueryProps = {
+    name: "renameColumn",
+    text: `ALTER TABLE ${currentName} RENAME TO ${newName};`,
+    values: [],
+  };
+  let { code, rows } = await performQuery(client, query);
+  if (code !== 200) {
+    res.status(400);
+    res.write(
+      JSON.stringify({
+        message: `Failed to rename table ${currentName} to ${newName}`,
+      })
+    );
+    next();
+    return;
+  }
+
+  // ALTER TABLE ${newName} RENAME CONSTRAINT ${currentName}_pkey TO ${newName}_pkey;
+  query = {
+    name: "renameColumnPrimaryKey",
+    text: `ALTER TABLE ${newName} RENAME CONSTRAINT ${currentName}_pkey TO ${newName}_pkey;`,
+    values: [],
+  };
+  ({ code, rows } = await performQuery(client, query));
+  if (code !== 200) {
+    res.status(400);
+    res.write(
+      JSON.stringify({
+        message: `Failed to rename table ${newName} constraint`,
+      })
+    );
+    next();
+    return;
+  }
+
+  // ALTER TABLE ${newName} RENAME COLUMN ${currentName)_id TO ${newName}_id;
+  query = {
+    name: "renameColumnName",
+    text: `ALTER TABLE ${newName} RENAME COLUMN ${currentName}_id TO ${newName}_id;`,
+    values: [],
+  };
+  ({ code, rows } = await performQuery(client, query));
+  if (code !== 200) {
+    res.status(400);
+    res.write(
+      JSON.stringify({
+        message: `Failed to update column name ${currentName}_id in table ${newName}`,
+      })
+    );
+    next();
+    return;
+  }
+
+  // ALTER TABLE clients RENAME COLUMN ${currentName} TO ${newName};
+  query = {
+    name: "renameClientsColumn",
+    text: `ALTER TABLE clients RENAME COLUMN ${currentName} TO ${newName};`,
+    values: [],
+  };
+  ({ code, rows } = await performQuery(client, query));
+  if (code !== 200) {
+    res.status(400);
+    res.write(
+      JSON.stringify({
+        message: `Failed to rename column ${currentName} in clients;`,
       })
     );
     next();
@@ -596,6 +679,7 @@ export const createField = async (req: Request, res: Response, next: any) => {
     return;
   }
 
+  const tabId = createColumnName(tabName);
   const fieldName = createColumnName(fieldData.name);
 
   let enumName: string = "";
@@ -644,8 +728,8 @@ export const createField = async (req: Request, res: Response, next: any) => {
 
   let requiredField = fieldData.required
     ? `NOT NULL DEFAULT '${defaultValue}'`
-    : "";
-  let queryText = `ALTER TABLE ${tabName} ADD COLUMN ${fieldName} ${fieldType} ${requiredField}`;
+    : `DEFAULT '${defaultValue}'`;
+  let queryText = `ALTER TABLE ${tabId} ADD COLUMN ${fieldName} ${fieldType} ${requiredField};`;
 
   let query: QueryProps = {
     name: `add${fieldName}Column`,
