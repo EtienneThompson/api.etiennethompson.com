@@ -600,6 +600,44 @@ export const updateTabName = async (
   next();
 };
 
+export const deleteTab = async (req: Request, res: Response, next: any) => {
+  const client = req.body.awsClient;
+  const tabName = createColumnName(req.body.tabName);
+
+  let query: QueryProps = {
+    name: "removeClientColumn",
+    text: `ALTER TABLE clients DROP COLUMN ${tabName};`,
+    values: [],
+  };
+  let { code, rows } = await performQuery(client, query);
+  if (code !== 200) {
+    res.status(400);
+    res.write(
+      JSON.stringify({
+        message: `Failed to delete column ${tabName} from clients.`,
+      })
+    );
+    next();
+    return;
+  }
+
+  query = {
+    name: "dropTabTable",
+    text: `DROP TABLE ${tabName};`,
+    values: [],
+  };
+  ({ code, rows } = await performQuery(client, query));
+  if (code !== 200) {
+    res.status(400);
+    res.write(JSON.stringify({ message: `Failed to drop table ${tabName}` }));
+    next();
+    return;
+  }
+
+  res.status(200);
+  next();
+};
+
 export const getAllFields = async (req: Request, res: Response, next: any) => {
   const client = req.body.awsClient;
 
