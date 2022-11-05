@@ -2,13 +2,14 @@ import { Request, Response } from "express";
 import { v4 as uuidv4 } from "uuid";
 import { QueryProps, performQuery } from "../utils/database";
 import { capitalize, isNullOrWhiteSpace } from "../utils/string";
+import { getEnumTypeValues, getTableSchema } from "./helpers";
 import {
   ClientDetailsTab,
   DatabaseColumn,
   ColumnType,
   IsNullable,
   InsertedEntry,
-  ColumnNameInfo,
+  ColumnSchemaInfo,
 } from "./types";
 
 const capitalizeName = (name: string): string => {
@@ -65,31 +66,25 @@ export const getClientDetails = async (
   const client = req.body.awsClient;
   let clientDetails: ClientDetailsTab[][] = [];
 
-  let query: QueryProps = {
-    name: "getClientSchema",
-    text: "SELECT column_name FROM information_schema.columns WHERE table_name = 'clients';",
-    values: [],
-  };
-  let { code, rows } = await performQuery(client, query);
-
-  if (code !== 200) {
-    res.status(404);
-    res.write(
-      JSON.stringify({ message: "The client database was not found." })
-    );
+  // Get all column names other than the id field.
+  let tableNames;
+  try {
+    tableNames = await getTableSchema(client, "clients");
+  } catch (e: any) {
+    res.status(400);
+    res.write(JSON.stringify({ message: e.message }));
     next();
     return;
   }
-  // Get all column names other than the id field.
-  let tableNames = rows.slice(1);
+  tableNames = tableNames.slice(1);
 
   // Get all the entries in the clients database.
-  query = {
+  let query: QueryProps = {
     name: "getClientEntries",
     text: "SELECT * from clients;",
     values: [],
   };
-  ({ code, rows } = await performQuery(client, query));
+  let { code, rows } = await performQuery(client, query);
   if (code !== 200) {
     res.status(400);
     res.write(
@@ -109,23 +104,16 @@ export const getClientDetails = async (
       if (isNullOrWhiteSpace(entry[tableName.column_name])) {
         continue;
       }
-      query = {
-        name: `get${tableName.column_name}Schema`,
-        text: "SELECT column_name, data_type, udt_name, is_nullable FROM information_schema.columns WHERE table_name=$1;",
-        values: [tableName.column_name],
-      };
-      ({ code, rows } = await performQuery(client, query));
-      if (code !== 200) {
+
+      let tableSchema;
+      try {
+        tableSchema = await getTableSchema(client, tableName.column_name);
+      } catch (e: any) {
         res.status(400);
-        res.write(
-          JSON.stringify({
-            message: `The auxiliary ${tableName.column_name} table was not found.`,
-          })
-        );
+        res.write(JSON.stringify({ message: e.message }));
         next();
         return;
       }
-      let tableSchema = rows;
 
       query = {
         name: `get${tableName.column_name}Entries`,
@@ -171,28 +159,15 @@ export const getClientDetails = async (
             break;
           case "USER-DEFINED":
             type = "select";
-
             // Get the possible values for the user defined enum.
-            query = {
-              name: `get${field.udt_name}Values`,
-              text: `SELECT unnest(enum_range(null::${field.udt_name}));`,
-              values: [],
-            };
-            ({ code, rows } = await performQuery(client, query));
-            if (code !== 200) {
-              res.status(404);
-              res.write({
-                message: "User defined enum not found in database",
-              });
+            try {
+              options = await getEnumTypeValues(client, field.udt_name);
+            } catch (e: any) {
+              res.status(400);
+              res.write(JSON.stringify({ message: e.message }));
               next();
               return;
             }
-
-            options = rows.map((row) => row.unnest);
-            if (options !== undefined) {
-              options.splice(0, 0, "---");
-            }
-
             break;
           default:
             type = "text";
@@ -233,39 +208,28 @@ export const getNewClientSchema = async (
   next: any
 ) => {
   const client = req.body.awsClient;
-  let query: QueryProps = {
-    name: "getClientSchema",
-    text: "SELECT column_name FROM information_schema.columns WHERE table_name = 'clients';",
-    values: [],
-  };
-  let { code, rows } = await performQuery(client, query);
 
-  if (code !== 200) {
-    res.status(404);
-    res.write(
-      JSON.stringify({ message: "The client database was not found." })
-    );
+  // Get all column names other than the id field.
+  let tableNames = await getTableSchema(client, "clients");
+  try {
+    tableNames = tableNames.slice(1);
+  } catch (e: any) {
+    res.status(400);
+    res.write(JSON.stringify({ message: e.message }));
     next();
     return;
   }
-  // Get all column names other than the id field.
-  let tableNames = rows.slice(1);
 
   const clientDetailsSchema: ClientDetailsTab[] = [];
 
   // Get the schema for each table related to clients.
   for (let tableName of tableNames) {
-    query = {
-      name: `get${tableName.column_name}Schema`,
-      text: "SELECT column_name, data_type, udt_name, is_nullable FROM information_schema.columns WHERE table_name=$1;",
-      values: [tableName.column_name],
-    };
-    ({ code, rows } = await performQuery(client, query));
-    if (code !== 200) {
+    let rows;
+    try {
+      rows = await getTableSchema(client, tableName.column_name);
+    } catch (e: any) {
       res.status(400);
-      res.write({
-        message: `The auxiliary ${tableName.column_name} table was not found.`,
-      });
+      res.write(JSON.stringify(JSON.stringify({ message: e.message })));
       next();
       return;
     }
@@ -301,22 +265,13 @@ export const getNewClientSchema = async (
           value = "---";
 
           // Get the possible values for the user defined enum.
-          query = {
-            name: `get${field.udt_name}Values`,
-            text: `SELECT unnest(enum_range(null::${field.udt_name}));`,
-            values: [],
-          };
-          ({ code, rows } = await performQuery(client, query));
-          if (code !== 200) {
-            res.status(404);
-            res.write({ message: "User defined enum not found in database" });
+          try {
+            options = await getEnumTypeValues(client, field.udt_name);
+          } catch (e: any) {
+            res.status(400);
+            res.write(JSON.stringify({ message: e.message }));
             next();
             return;
-          }
-
-          options = rows.map((row) => row.unnest);
-          if (options !== undefined) {
-            options.splice(0, 0, "---");
           }
 
           break;
@@ -452,23 +407,9 @@ export const postNewClientDetails = async (
 export const getAllTabs = async (req: Request, res: Response, next: any) => {
   const client = req.body.awsClient;
 
-  let query: QueryProps = {
-    name: "getClientSchema",
-    text: "SELECT column_name FROM information_schema.columns WHERE table_name = 'clients';",
-    values: [],
-  };
-  let { code, rows } = await performQuery(client, query);
-
-  if (code !== 200) {
-    res.status(404);
-    res.write(
-      JSON.stringify({ message: "The client database was not found." })
-    );
-    next();
-    return;
-  }
   // Get all column names other than the id field.
-  let tableNames = rows.slice(1) as ColumnNameInfo[];
+  let tableNames = await getTableSchema(client, "clients");
+  tableNames = tableNames.slice(1);
   let tabNames = tableNames.map((name) => capitalizeName(name.column_name));
 
   res.status(200);
@@ -641,44 +582,14 @@ export const deleteTab = async (req: Request, res: Response, next: any) => {
 export const getAllFields = async (req: Request, res: Response, next: any) => {
   const client = req.body.awsClient;
 
-  let query: QueryProps = {
-    name: "getClientSchema",
-    text: "SELECT column_name FROM information_schema.columns WHERE table_name = 'clients';",
-    values: [],
-  };
-  let { code, rows } = await performQuery(client, query);
-
-  if (code !== 200) {
-    res.status(404);
-    res.write(
-      JSON.stringify({ message: "The client database was not found." })
-    );
-    next();
-    return;
-  }
+  let tableNames = await getTableSchema(client, "clients");
   // Get all column names other than the id field.
-  let tableNames = rows.slice(1) as ColumnNameInfo[];
+  tableNames = tableNames.slice(1) as ColumnSchemaInfo[];
   let allFieldNames: string[] = [];
 
   for (let tableName of tableNames) {
-    query = {
-      name: `get${tableName.column_name}Columns`,
-      text: "SELECT column_name FROM information_schema.columns WHERE table_name=$1",
-      values: [tableName.column_name],
-    };
-    ({ code, rows } = await performQuery(client, query));
-    if (code !== 200) {
-      res.status(404);
-      res.write(
-        JSON.stringify({
-          message: `The ${tableName.column_name} table was not found.`,
-        })
-      );
-      next();
-      return;
-    }
-
-    let fieldNames = rows.slice(1) as ColumnNameInfo[];
+    let fieldNames = await getTableSchema(client, tableName.column_name);
+    fieldNames = fieldNames.slice(1) as ColumnSchemaInfo[];
     allFieldNames = allFieldNames.concat(
       fieldNames.map((name) => capitalizeName(name.column_name))
     );
@@ -697,27 +608,12 @@ export const getFieldsForTab = async (
   const client = req.body.awsClient;
   const tabName = createColumnName(req.query.tabName as string);
 
-  let query: QueryProps = {
-    name: `get${tabName}Columns`,
-    text: "SELECT column_name FROM information_schema.columns WHERE table_name=$1",
-    values: [tabName],
-  };
-  let { code, rows } = await performQuery(client, query);
-  if (code !== 200) {
-    res.status(400);
-    res.write(
-      JSON.stringify({
-        message: `The ${tabName} table was not found.`,
-      })
-    );
-    next();
-    return;
-  }
-
-  let fieldNames = rows.slice(1) as ColumnNameInfo[];
+  let fieldNames = await getTableSchema(client, tabName);
+  fieldNames = fieldNames.slice(1) as ColumnSchemaInfo[];
   const fieldStringNames = fieldNames.map((name) =>
     capitalizeName(name.column_name)
   );
+
   res.status(200);
   res.write(JSON.stringify({ fieldNames: fieldStringNames }));
   next();
@@ -732,17 +628,12 @@ export const getFieldSchema = async (
   const tabName = createColumnName(req.query.tabName as string);
   const fieldName = createColumnName(req.query.fieldName as string);
 
-  let query: QueryProps = {
-    name: `get${tabName}Schema`,
-    text: "SELECT column_name, data_type, udt_name, is_nullable FROM information_schema.columns WHERE table_name=$1;",
-    values: [tabName],
-  };
-  let { code, rows } = await performQuery(client, query);
-  if (code !== 200) {
+  let rows;
+  try {
+    rows = await getTableSchema(client, tabName);
+  } catch (e: any) {
     res.status(400);
-    res.write({
-      message: `The auxiliary ${tabName} table was not found.`,
-    });
+    res.write(JSON.stringify({ message: e.message }));
     next();
     return;
   }
@@ -771,12 +662,12 @@ export const getFieldSchema = async (
       value = "---";
 
       // Get the possible values for the user defined enum.
-      query = {
+      let query = {
         name: `get${field.udt_name}Values`,
         text: `SELECT unnest(enum_range(null::${field.udt_name}));`,
         values: [],
       };
-      ({ code, rows } = await performQuery(client, query));
+      let { code, rows } = await performQuery(client, query);
       if (code !== 200) {
         res.status(404);
         res.write({ message: "User defined enum not found in database" });

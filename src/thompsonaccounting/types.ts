@@ -1,5 +1,8 @@
-export interface ColumnNameInfo {
+export interface ColumnSchemaInfo {
   column_name: string;
+  data_type: string;
+  udt_name: string;
+  is_nullable: string;
 }
 
 export type ColumnType =
