@@ -689,6 +689,127 @@ export const getAllFields = async (req: Request, res: Response, next: any) => {
   next();
 };
 
+export const getFieldsForTab = async (
+  req: Request,
+  res: Response,
+  next: any
+) => {
+  const client = req.body.awsClient;
+  const tabName = createColumnName(req.query.tabName as string);
+
+  let query: QueryProps = {
+    name: `get${tabName}Columns`,
+    text: "SELECT column_name FROM information_schema.columns WHERE table_name=$1",
+    values: [tabName],
+  };
+  let { code, rows } = await performQuery(client, query);
+  if (code !== 200) {
+    res.status(400);
+    res.write(
+      JSON.stringify({
+        message: `The ${tabName} table was not found.`,
+      })
+    );
+    next();
+    return;
+  }
+
+  let fieldNames = rows.slice(1) as ColumnNameInfo[];
+  const fieldStringNames = fieldNames.map((name) =>
+    capitalizeName(name.column_name)
+  );
+  res.status(200);
+  res.write(JSON.stringify({ fieldNames: fieldStringNames }));
+  next();
+};
+
+export const getFieldSchema = async (
+  req: Request,
+  res: Response,
+  next: any
+) => {
+  const client = req.body.awsClient;
+  const tabName = createColumnName(req.query.tabName as string);
+  const fieldName = createColumnName(req.query.fieldName as string);
+
+  let query: QueryProps = {
+    name: `get${tabName}Schema`,
+    text: "SELECT column_name, data_type, udt_name, is_nullable FROM information_schema.columns WHERE table_name=$1;",
+    values: [tabName],
+  };
+  let { code, rows } = await performQuery(client, query);
+  if (code !== 200) {
+    res.status(400);
+    res.write({
+      message: `The auxiliary ${tabName} table was not found.`,
+    });
+    next();
+    return;
+  }
+
+  let field = rows.filter((data) => data.column_name === fieldName)[0];
+
+  // Get type and default value based on data type.
+  let type: ColumnType;
+  let value: any;
+  let options: string[] | undefined;
+  switch (field.data_type) {
+    case "character varying":
+      type = "text";
+      value = "";
+      break;
+    case "boolean":
+      type = "checkbox";
+      value = false;
+      break;
+    case "text":
+      type = "textarea";
+      value = "";
+      break;
+    case "USER-DEFINED":
+      type = "select";
+      value = "---";
+
+      // Get the possible values for the user defined enum.
+      query = {
+        name: `get${field.udt_name}Values`,
+        text: `SELECT unnest(enum_range(null::${field.udt_name}));`,
+        values: [],
+      };
+      ({ code, rows } = await performQuery(client, query));
+      if (code !== 200) {
+        res.status(404);
+        res.write({ message: "User defined enum not found in database" });
+        next();
+        return;
+      }
+
+      options = rows.map((row) => row.unnest);
+      if (options !== undefined) {
+        options.splice(0, 0, "---");
+      }
+
+      break;
+    default:
+      type = "text";
+      value = "";
+      break;
+  }
+
+  let fieldSchema: DatabaseColumn = {
+    name: field.column_name,
+    label: capitalizeName(field.column_name),
+    required: field.is_nullable === IsNullable.No,
+    type: type,
+    value: value,
+    options: options,
+  };
+
+  res.status(200);
+  res.write(JSON.stringify({ fieldSchema: fieldSchema }));
+  next();
+};
+
 export const createField = async (req: Request, res: Response, next: any) => {
   const client = req.body.awsClient;
   const tabName = req.body.tabName.toLowerCase() as string;
@@ -787,5 +908,15 @@ export const createField = async (req: Request, res: Response, next: any) => {
   }
 
   res.status(200);
+  next();
+};
+
+export const updateField = (req: Request, res: Response, next: any) => {
+  const client = req.body.awsClient;
+  const tabName = req.body.tabName;
+  const fieldName = req.body.fieldName;
+  const fieldValues = req.body.fieldValues;
+
+  res.status(400);
   next();
 };
