@@ -1,6 +1,11 @@
 import { Request, Response } from "express";
 import { v4 as uuidv4 } from "uuid";
-import { QueryProps, performQuery } from "../utils/database";
+import { Map } from "../types";
+import {
+  QueryProps,
+  performQuery,
+  connectToAWSDatabase,
+} from "../utils/database";
 import { capitalize, isNullOrWhiteSpace } from "../utils/string";
 import { getEnumTypeValues, getTableSchema } from "./helpers";
 import {
@@ -58,13 +63,100 @@ const deleteInsertedEntries = async (
   }
 };
 
+const getSingleClientDetails = async (
+  entry: Map,
+  tableNames: ColumnSchemaInfo[]
+): Promise<ClientDetailsTab[]> => {
+  let client = await connectToAWSDatabase(
+    process.env.THOMPSON_ACCOUNTING_DATABASE_HOST as string,
+    process.env.THOMPSON_ACCOUNTING_DATABASE_USER as string,
+    process.env.THOMPSON_ACCOUNTING_DATABASE_PASSWORD as string,
+    process.env.THOMPSON_ACCOUNTING_DATABASE_DATABASE as string
+  );
+  const clientDetailsTabs: ClientDetailsTab[] = [];
+
+  // Get the schema for each table related to clients.
+  for (let tableName of tableNames) {
+    if (isNullOrWhiteSpace(entry[tableName.column_name])) {
+      continue;
+    }
+
+    let tableSchema = await getTableSchema(client, tableName.column_name);
+
+    let query = {
+      name: `get${tableName.column_name}Entries`,
+      text: `SELECT * FROM ${tableName.column_name} WHERE ${tableName.column_name}_id = $1`,
+      values: [entry[tableName.column_name]],
+    };
+    let { code, rows } = await performQuery(client, query);
+    if (code !== 200) {
+      throw new Error("Couldn't get the details for a client.");
+    }
+    let tableValues = rows[0];
+
+    let fields: DatabaseColumn[] = [];
+
+    let index = 0;
+    // Convert the database schema to the UI schema.
+    for (let field of tableSchema) {
+      // Skip any id fields.
+      if (field.column_name.endsWith("id")) {
+        continue;
+      }
+
+      // Get type and default value based on data type.
+      let type: ColumnType;
+      let value = tableValues[field.column_name];
+      let options: string[] | undefined;
+      switch (field.data_type) {
+        case "character varying":
+          type = "text";
+          break;
+        case "boolean":
+          type = "checkbox";
+          break;
+        case "text":
+          type = "textarea";
+          break;
+        case "USER-DEFINED":
+          type = "select";
+          // Get the possible values for the user defined enum.
+          options = await getEnumTypeValues(client, field.udt_name);
+          break;
+        default:
+          type = "text";
+          break;
+      }
+
+      let fieldSchema: DatabaseColumn = {
+        name: field.column_name,
+        label: capitalizeName(field.column_name),
+        required: field.is_nullable === IsNullable.No,
+        type: type,
+        value: value,
+        options: options,
+      };
+      fields.push(fieldSchema);
+
+      index++;
+    }
+
+    clientDetailsTabs.push({
+      name: tableName.column_name,
+      label: capitalizeName(tableName.column_name),
+      fields: fields,
+    });
+  }
+
+  return clientDetailsTabs;
+};
+
 export const getClientDetails = async (
   req: Request,
   res: Response,
   next: any
 ) => {
   const client = req.body.awsClient;
-  let clientDetails: ClientDetailsTab[][] = [];
 
   // Get all column names other than the id field.
   let tableNames;
@@ -96,106 +188,13 @@ export const getClientDetails = async (
 
   let clientEntries = rows;
 
+  let promises: Promise<ClientDetailsTab[]>[] = [];
   for (let entry of clientEntries) {
-    const clientDetailsTabs: ClientDetailsTab[] = [];
-
-    // Get the schema for each table related to clients.
-    for (let tableName of tableNames) {
-      if (isNullOrWhiteSpace(entry[tableName.column_name])) {
-        continue;
-      }
-
-      let tableSchema;
-      try {
-        tableSchema = await getTableSchema(client, tableName.column_name);
-      } catch (e: any) {
-        res.status(400);
-        res.write(JSON.stringify({ message: e.message }));
-        next();
-        return;
-      }
-
-      query = {
-        name: `get${tableName.column_name}Entries`,
-        text: `SELECT * FROM ${tableName.column_name} WHERE ${tableName.column_name}_id = $1`,
-        values: [entry[tableName.column_name]],
-      };
-      ({ code, rows } = await performQuery(client, query));
-      if (code !== 200) {
-        res.status(400);
-        res.write(
-          JSON.stringify({
-            message: `The entries of the ${tableName.column_name} couldn't be fetched.`,
-          })
-        );
-        next();
-        return;
-      }
-      let tableValues = rows[0];
-
-      let fields: DatabaseColumn[] = [];
-
-      let index = 0;
-      // Convert the database schema to the UI schema.
-      for (let field of tableSchema) {
-        // Skip any id fields.
-        if (field.column_name.endsWith("id")) {
-          continue;
-        }
-
-        // Get type and default value based on data type.
-        let type: ColumnType;
-        let value = tableValues[field.column_name];
-        let options: string[] | undefined;
-        switch (field.data_type) {
-          case "character varying":
-            type = "text";
-            break;
-          case "boolean":
-            type = "checkbox";
-            break;
-          case "text":
-            type = "textarea";
-            break;
-          case "USER-DEFINED":
-            type = "select";
-            // Get the possible values for the user defined enum.
-            try {
-              options = await getEnumTypeValues(client, field.udt_name);
-            } catch (e: any) {
-              res.status(400);
-              res.write(JSON.stringify({ message: e.message }));
-              next();
-              return;
-            }
-            break;
-          default:
-            type = "text";
-            break;
-        }
-
-        let fieldSchema: DatabaseColumn = {
-          name: field.column_name,
-          label: capitalizeName(field.column_name),
-          required: field.is_nullable === IsNullable.No,
-          type: type,
-          value: value,
-          options: options,
-        };
-        fields.push(fieldSchema);
-
-        index++;
-      }
-
-      clientDetailsTabs.push({
-        name: tableName.column_name,
-        label: capitalizeName(tableName.column_name),
-        fields: fields,
-      });
-    }
-
-    clientDetails.push(clientDetailsTabs);
+    let clientDetailsPromise = getSingleClientDetails(entry, tableNames);
+    promises.push(clientDetailsPromise);
   }
+
+  let clientDetails = await Promise.all(promises);
 
   res.status(200);
   res.write(JSON.stringify(clientDetails));
