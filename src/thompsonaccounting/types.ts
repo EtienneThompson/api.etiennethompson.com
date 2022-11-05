@@ -1,3 +1,7 @@
+export interface ColumnNameInfo {
+  column_name: string;
+}
+
 export type ColumnType =
   | "text"
   | "checkbox"

@@ -66,21 +66,10 @@ const makeSingleQuery = async (
   client: Client,
   query: QueryProps
 ): Promise<QueryResponse> => {
-  const response = await client.query(query);
-
-  if (response) {
-    if (response.rowCount > 0 && response.rows.length > 0) {
-      // The query was successful and data was returned.
-      return { code: 200, rows: response.rows } as QueryResponse;
-    } else if (response.rowCount > 0 && response.rows.length === 0) {
-      // The query was successful but no data was returned.
-      return { code: 200, rows: [] } as QueryResponse;
-    } else {
-      // The query was not successful.
-      return { code: 400, rows: [] } as QueryResponse;
-    }
-  } else {
-    // No response was returned, problem with connection.
-    return { code: 500, rows: [] } as QueryResponse;
+  try {
+    const response = await client.query(query);
+    return { code: 200, rows: response.rows } as QueryResponse;
+  } catch (error) {
+    return { code: 400, rows: [] } as QueryResponse;
   }
 };

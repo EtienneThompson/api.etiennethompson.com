@@ -1,20 +1,33 @@
 import { Request, Response } from "express";
 import { v4 as uuidv4 } from "uuid";
 import { QueryProps, performQuery } from "../utils/database";
+import { capitalize, isNullOrWhiteSpace } from "../utils/string";
 import {
   ClientDetailsTab,
   DatabaseColumn,
   ColumnType,
   IsNullable,
   InsertedEntry,
+  ColumnNameInfo,
 } from "./types";
 
 const capitalizeName = (name: string): string => {
   let pieces = name.split("_");
   let ret_string: string = "";
   for (let piece of pieces) {
-    piece = piece.charAt(0).toUpperCase() + piece.slice(1);
+    piece = capitalize(piece);
     ret_string += piece + " ";
+  }
+
+  ret_string = ret_string.substring(0, ret_string.length - 1);
+  return ret_string;
+};
+
+const createColumnName = (name: string): string => {
+  let pieces = name.split(" ");
+  let ret_string: string = "";
+  for (let piece of pieces) {
+    ret_string += piece.toLowerCase() + "_";
   }
 
   ret_string = ret_string.substring(0, ret_string.length - 1);
@@ -93,6 +106,9 @@ export const getClientDetails = async (
 
     // Get the schema for each table related to clients.
     for (let tableName of tableNames) {
+      if (isNullOrWhiteSpace(entry[tableName.column_name])) {
+        continue;
+      }
       query = {
         name: `get${tableName.column_name}Schema`,
         text: "SELECT column_name, data_type, udt_name, is_nullable FROM information_schema.columns WHERE table_name=$1;",
@@ -430,5 +446,477 @@ export const postNewClientDetails = async (
   }
 
   res.status(200);
+  next();
+};
+
+export const getAllTabs = async (req: Request, res: Response, next: any) => {
+  const client = req.body.awsClient;
+
+  let query: QueryProps = {
+    name: "getClientSchema",
+    text: "SELECT column_name FROM information_schema.columns WHERE table_name = 'clients';",
+    values: [],
+  };
+  let { code, rows } = await performQuery(client, query);
+
+  if (code !== 200) {
+    res.status(404);
+    res.write(
+      JSON.stringify({ message: "The client database was not found." })
+    );
+    next();
+    return;
+  }
+  // Get all column names other than the id field.
+  let tableNames = rows.slice(1) as ColumnNameInfo[];
+  let tabNames = tableNames.map((name) => capitalizeName(name.column_name));
+
+  res.status(200);
+  res.write(JSON.stringify({ tabs: tabNames }));
+  next();
+};
+
+export const createTab = async (req: Request, res: Response, next: any) => {
+  const client = req.body.awsClient;
+  const tabName = createColumnName(req.body.tabName);
+  const tabNameKey = `${tabName}_id`;
+
+  // Create a new database table for the tabs.
+  let query: QueryProps = {
+    name: "createTabQuery",
+    text: `CREATE TABLE ${tabName} (${tabNameKey} VARCHAR(36) PRIMARY KEY);`,
+    values: [],
+  };
+  let { code, rows } = await performQuery(client, query);
+  if (code !== 200) {
+    res.status(400);
+    res.write(JSON.stringify({ message: `Could not create tab ${tabName}.` }));
+    next();
+    return;
+  }
+
+  query = {
+    name: "AddTabColumn",
+    text: `ALTER TABLE clients ADD COLUMN ${tabName} VARCHAR(36) CONSTRAINT clients_${tabName}_fk_${tabNameKey} REFERENCES ${tabName} (${tabNameKey});`,
+    values: [],
+  };
+  ({ code, rows } = await performQuery(client, query));
+  if (code !== 200) {
+    res.status(400);
+    res.write(
+      JSON.stringify({
+        message: `Could not add the tab ${tabName} to clients.`,
+      })
+    );
+    next();
+    return;
+  }
+
+  res.status(200);
+  next();
+};
+
+export const updateTabName = async (
+  req: Request,
+  res: Response,
+  next: any
+) => {
+  const client = req.body.awsClient;
+  const currentName = req.body.currentName;
+  const newName = req.body.newName;
+
+  let query: QueryProps = {
+    name: "renameColumn",
+    text: `ALTER TABLE ${currentName} RENAME TO ${newName};`,
+    values: [],
+  };
+  let { code, rows } = await performQuery(client, query);
+  if (code !== 200) {
+    res.status(400);
+    res.write(
+      JSON.stringify({
+        message: `Failed to rename table ${currentName} to ${newName}`,
+      })
+    );
+    next();
+    return;
+  }
+
+  // ALTER TABLE ${newName} RENAME CONSTRAINT ${currentName}_pkey TO ${newName}_pkey;
+  query = {
+    name: "renameColumnPrimaryKey",
+    text: `ALTER TABLE ${newName} RENAME CONSTRAINT ${currentName}_pkey TO ${newName}_pkey;`,
+    values: [],
+  };
+  ({ code, rows } = await performQuery(client, query));
+  if (code !== 200) {
+    res.status(400);
+    res.write(
+      JSON.stringify({
+        message: `Failed to rename table ${newName} constraint`,
+      })
+    );
+    next();
+    return;
+  }
+
+  // ALTER TABLE ${newName} RENAME COLUMN ${currentName)_id TO ${newName}_id;
+  query = {
+    name: "renameColumnName",
+    text: `ALTER TABLE ${newName} RENAME COLUMN ${currentName}_id TO ${newName}_id;`,
+    values: [],
+  };
+  ({ code, rows } = await performQuery(client, query));
+  if (code !== 200) {
+    res.status(400);
+    res.write(
+      JSON.stringify({
+        message: `Failed to update column name ${currentName}_id in table ${newName}`,
+      })
+    );
+    next();
+    return;
+  }
+
+  // ALTER TABLE clients RENAME COLUMN ${currentName} TO ${newName};
+  query = {
+    name: "renameClientsColumn",
+    text: `ALTER TABLE clients RENAME COLUMN ${currentName} TO ${newName};`,
+    values: [],
+  };
+  ({ code, rows } = await performQuery(client, query));
+  if (code !== 200) {
+    res.status(400);
+    res.write(
+      JSON.stringify({
+        message: `Failed to rename column ${currentName} in clients;`,
+      })
+    );
+    next();
+    return;
+  }
+
+  res.status(200);
+  next();
+};
+
+export const deleteTab = async (req: Request, res: Response, next: any) => {
+  const client = req.body.awsClient;
+  const tabName = createColumnName(req.body.tabName);
+
+  let query: QueryProps = {
+    name: "removeClientColumn",
+    text: `ALTER TABLE clients DROP COLUMN ${tabName};`,
+    values: [],
+  };
+  let { code, rows } = await performQuery(client, query);
+  if (code !== 200) {
+    res.status(400);
+    res.write(
+      JSON.stringify({
+        message: `Failed to delete column ${tabName} from clients.`,
+      })
+    );
+    next();
+    return;
+  }
+
+  query = {
+    name: "dropTabTable",
+    text: `DROP TABLE ${tabName};`,
+    values: [],
+  };
+  ({ code, rows } = await performQuery(client, query));
+  if (code !== 200) {
+    res.status(400);
+    res.write(JSON.stringify({ message: `Failed to drop table ${tabName}` }));
+    next();
+    return;
+  }
+
+  res.status(200);
+  next();
+};
+
+export const getAllFields = async (req: Request, res: Response, next: any) => {
+  const client = req.body.awsClient;
+
+  let query: QueryProps = {
+    name: "getClientSchema",
+    text: "SELECT column_name FROM information_schema.columns WHERE table_name = 'clients';",
+    values: [],
+  };
+  let { code, rows } = await performQuery(client, query);
+
+  if (code !== 200) {
+    res.status(404);
+    res.write(
+      JSON.stringify({ message: "The client database was not found." })
+    );
+    next();
+    return;
+  }
+  // Get all column names other than the id field.
+  let tableNames = rows.slice(1) as ColumnNameInfo[];
+  let allFieldNames: string[] = [];
+
+  for (let tableName of tableNames) {
+    query = {
+      name: `get${tableName.column_name}Columns`,
+      text: "SELECT column_name FROM information_schema.columns WHERE table_name=$1",
+      values: [tableName.column_name],
+    };
+    ({ code, rows } = await performQuery(client, query));
+    if (code !== 200) {
+      res.status(404);
+      res.write(
+        JSON.stringify({
+          message: `The ${tableName.column_name} table was not found.`,
+        })
+      );
+      next();
+      return;
+    }
+
+    let fieldNames = rows.slice(1) as ColumnNameInfo[];
+    allFieldNames = allFieldNames.concat(
+      fieldNames.map((name) => capitalizeName(name.column_name))
+    );
+  }
+
+  res.status(200);
+  res.write(JSON.stringify({ fields: allFieldNames }));
+  next();
+};
+
+export const getFieldsForTab = async (
+  req: Request,
+  res: Response,
+  next: any
+) => {
+  const client = req.body.awsClient;
+  const tabName = createColumnName(req.query.tabName as string);
+
+  let query: QueryProps = {
+    name: `get${tabName}Columns`,
+    text: "SELECT column_name FROM information_schema.columns WHERE table_name=$1",
+    values: [tabName],
+  };
+  let { code, rows } = await performQuery(client, query);
+  if (code !== 200) {
+    res.status(400);
+    res.write(
+      JSON.stringify({
+        message: `The ${tabName} table was not found.`,
+      })
+    );
+    next();
+    return;
+  }
+
+  let fieldNames = rows.slice(1) as ColumnNameInfo[];
+  const fieldStringNames = fieldNames.map((name) =>
+    capitalizeName(name.column_name)
+  );
+  res.status(200);
+  res.write(JSON.stringify({ fieldNames: fieldStringNames }));
+  next();
+};
+
+export const getFieldSchema = async (
+  req: Request,
+  res: Response,
+  next: any
+) => {
+  const client = req.body.awsClient;
+  const tabName = createColumnName(req.query.tabName as string);
+  const fieldName = createColumnName(req.query.fieldName as string);
+
+  let query: QueryProps = {
+    name: `get${tabName}Schema`,
+    text: "SELECT column_name, data_type, udt_name, is_nullable FROM information_schema.columns WHERE table_name=$1;",
+    values: [tabName],
+  };
+  let { code, rows } = await performQuery(client, query);
+  if (code !== 200) {
+    res.status(400);
+    res.write({
+      message: `The auxiliary ${tabName} table was not found.`,
+    });
+    next();
+    return;
+  }
+
+  let field = rows.filter((data) => data.column_name === fieldName)[0];
+
+  // Get type and default value based on data type.
+  let type: ColumnType;
+  let value: any;
+  let options: string[] | undefined;
+  switch (field.data_type) {
+    case "character varying":
+      type = "text";
+      value = "";
+      break;
+    case "boolean":
+      type = "checkbox";
+      value = false;
+      break;
+    case "text":
+      type = "textarea";
+      value = "";
+      break;
+    case "USER-DEFINED":
+      type = "select";
+      value = "---";
+
+      // Get the possible values for the user defined enum.
+      query = {
+        name: `get${field.udt_name}Values`,
+        text: `SELECT unnest(enum_range(null::${field.udt_name}));`,
+        values: [],
+      };
+      ({ code, rows } = await performQuery(client, query));
+      if (code !== 200) {
+        res.status(404);
+        res.write({ message: "User defined enum not found in database" });
+        next();
+        return;
+      }
+
+      options = rows.map((row) => row.unnest);
+      if (options !== undefined) {
+        options.splice(0, 0, "---");
+      }
+
+      break;
+    default:
+      type = "text";
+      value = "";
+      break;
+  }
+
+  let fieldSchema: DatabaseColumn = {
+    name: field.column_name,
+    label: capitalizeName(field.column_name),
+    required: field.is_nullable === IsNullable.No,
+    type: type,
+    value: value,
+    options: options,
+  };
+
+  res.status(200);
+  res.write(JSON.stringify({ fieldSchema: fieldSchema }));
+  next();
+};
+
+export const createField = async (req: Request, res: Response, next: any) => {
+  const client = req.body.awsClient;
+  const tabName = req.body.tabName.toLowerCase() as string;
+  const fieldData = req.body.fieldData as DatabaseColumn;
+
+  if (isNullOrWhiteSpace(tabName)) {
+    res.status(400);
+    res.write(
+      JSON.stringify({ message: "You must provide a tab to add to." })
+    );
+  }
+
+  if (isNullOrWhiteSpace(fieldData.name)) {
+    res.status(400);
+    res.write(JSON.stringify({ message: "You must provide a field name." }));
+    next();
+    return;
+  }
+
+  if (fieldData.type === "select" && !fieldData.options) {
+    res.status(400);
+    res.write(
+      JSON.stringify({ message: "You must provide values for a dropdown." })
+    );
+    next();
+    return;
+  }
+
+  const tabId = createColumnName(tabName);
+  const fieldName = createColumnName(fieldData.name);
+
+  let enumName: string = "";
+  if (fieldData.type === "select" && fieldData.options) {
+    enumName = capitalize(fieldName);
+    let createEnumQuery = `CREATE TYPE ${enumName} AS ENUM (${fieldData.options?.map(
+      (val) => "'" + val + "'"
+    )});`;
+
+    let enumQuery: QueryProps = {
+      name: `create${enumName}Query`,
+      text: createEnumQuery,
+      values: [],
+    };
+    let { code, rows } = await performQuery(client, enumQuery);
+    if (code !== 200) {
+      res.status(400);
+      res.write(
+        JSON.stringify({ message: `Failed to create the enum ${enumName}` })
+      );
+      next();
+      return;
+    }
+  }
+
+  let fieldType: string = "";
+  let defaultValue: string | boolean;
+  switch (fieldData.type) {
+    case "text":
+      fieldType = "VARCHAR(200)";
+      defaultValue = "N/A";
+      break;
+    case "checkbox":
+      fieldType = "BOOLEAN";
+      defaultValue = false;
+      break;
+    case "select":
+      fieldType = enumName;
+      defaultValue = fieldData.options ? fieldData.options[0] : "";
+      break;
+    default:
+      fieldType = "TEXT";
+      defaultValue = "N/A";
+      break;
+  }
+
+  let requiredField = fieldData.required
+    ? `NOT NULL DEFAULT '${defaultValue}'`
+    : `DEFAULT '${defaultValue}'`;
+  let queryText = `ALTER TABLE ${tabId} ADD COLUMN ${fieldName} ${fieldType} ${requiredField};`;
+
+  let query: QueryProps = {
+    name: `add${fieldName}Column`,
+    text: queryText,
+    values: [],
+  };
+  let { code, rows } = await performQuery(client, query);
+  if (code !== 200) {
+    res.status(400);
+    res.write(
+      JSON.stringify({
+        message: `Failed to add the field ${fieldData.name} to tab ${tabName}`,
+      })
+    );
+    next();
+    return;
+  }
+
+  res.status(200);
+  next();
+};
+
+export const updateField = (req: Request, res: Response, next: any) => {
+  const client = req.body.awsClient;
+  const tabName = req.body.tabName;
+  const fieldName = req.body.fieldName;
+  const fieldValues = req.body.fieldValues;
+
+  res.status(400);
   next();
 };
