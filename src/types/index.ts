@@ -1,3 +1,7 @@
+export interface Map {
+  [key: string]: string;
+}
+
 export interface QueryResponse {
   code: number;
   rows: any[];
