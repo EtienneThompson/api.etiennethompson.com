@@ -148,6 +148,8 @@ const getSingleClientDetails = async (
     });
   }
 
+  client.end();
+
   return clientDetailsTabs;
 };
 
