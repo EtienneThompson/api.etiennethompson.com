@@ -15,6 +15,7 @@ import {
   IsNullable,
   InsertedEntry,
   ColumnSchemaInfo,
+  ColumnMap,
 } from "./types";
 
 const capitalizeName = (name: string): string => {
@@ -77,22 +78,21 @@ const getSingleClientDetails = async (
 
   // Get the schema for each table related to clients.
   for (let tableName of tableNames) {
-    if (isNullOrWhiteSpace(entry[tableName.column_name])) {
-      continue;
-    }
-
     let tableSchema = await getTableSchema(client, tableName.column_name);
 
-    let query = {
-      name: `get${tableName.column_name}Entries`,
-      text: `SELECT * FROM ${tableName.column_name} WHERE ${tableName.column_name}_id = $1`,
-      values: [entry[tableName.column_name]],
-    };
-    let { code, rows } = await performQuery(client, query);
-    if (code !== 200) {
-      throw new Error("Couldn't get the details for a client.");
+    let tableValues: ColumnMap = {};
+    if (!isNullOrWhiteSpace(entry[tableName.column_name])) {
+      let query = {
+        name: `get${tableName.column_name}Entries`,
+        text: `SELECT * FROM ${tableName.column_name} WHERE ${tableName.column_name}_id = $1`,
+        values: [entry[tableName.column_name]],
+      };
+      let { code, rows } = await performQuery(client, query);
+      if (code !== 200) {
+        throw new Error("Couldn't get the details for a client.");
+      }
+      tableValues = rows[0];
     }
-    let tableValues = rows[0];
 
     let fields: DatabaseColumn[] = [];
 
@@ -106,7 +106,14 @@ const getSingleClientDetails = async (
 
       // Get type and default value based on data type.
       let type: ColumnType;
-      let value = tableValues[field.column_name];
+      let value =
+        Object.keys(tableValues).length > 0
+          ? tableValues[field.column_name]
+          : field.data_type === "USER-DEFINED"
+          ? "---"
+          : field.data_type === "boolean"
+          ? false
+          : "";
       let options: string[] | undefined;
       switch (field.data_type) {
         case "character varying":

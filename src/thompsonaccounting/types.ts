@@ -1,3 +1,7 @@
+export interface ColumnMap {
+  [key: string]: string | boolean;
+}
+
 export interface ColumnSchemaInfo {
   column_name: string;
   data_type: string;
