@@ -38,6 +38,11 @@ export interface ClientDetailsTab {
   fields: DatabaseColumn[];
 }
 
+export interface ClientDetails {
+  id: string;
+  tabs: ClientDetailsTab[];
+}
+
 export enum IsNullable {
   Yes = "YES",
   No = "NO",

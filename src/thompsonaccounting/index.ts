@@ -9,6 +9,7 @@ import {
 import { capitalize, isNullOrWhiteSpace } from "../utils/string";
 import { getEnumTypeValues, getTableSchema } from "./helpers";
 import {
+  ClientDetails,
   ClientDetailsTab,
   DatabaseColumn,
   ColumnType,
@@ -67,7 +68,7 @@ const deleteInsertedEntries = async (
 const getSingleClientDetails = async (
   entry: Map,
   tableNames: ColumnSchemaInfo[]
-): Promise<ClientDetailsTab[]> => {
+): Promise<ClientDetails> => {
   let client = await connectToAWSDatabase(
     process.env.THOMPSON_ACCOUNTING_DATABASE_HOST as string,
     process.env.THOMPSON_ACCOUNTING_DATABASE_USER as string,
@@ -157,7 +158,10 @@ const getSingleClientDetails = async (
 
   client.end();
 
-  return clientDetailsTabs;
+  return {
+    id: entry.id,
+    tabs: clientDetailsTabs,
+  };
 };
 
 export const getClientDetails = async (
@@ -197,7 +201,7 @@ export const getClientDetails = async (
 
   let clientEntries = rows;
 
-  let promises: Promise<ClientDetailsTab[]>[] = [];
+  let promises: Promise<ClientDetails>[] = [];
   for (let entry of clientEntries) {
     let clientDetailsPromise = getSingleClientDetails(entry, tableNames);
     promises.push(clientDetailsPromise);
@@ -330,6 +334,7 @@ export const postNewClientDetails = async (
 
   // Write an entry to each auxiliary table.
   for (let tabData of newClientTabs) {
+    console.log(tabData.name);
     foreignPlaceholders.push(`$${foreignIndex}`);
     foreignIndex++;
     // Get the list of column names and values to insert.
@@ -339,8 +344,8 @@ export const postNewClientDetails = async (
     let index = 2;
     for (let fieldData of tabData.fields) {
       if (
-        (fieldData.required && fieldData.value === "") ||
-        fieldData.value === "---"
+        fieldData.required &&
+        (fieldData.value === "" || fieldData.value === "---")
       ) {
         await deleteInsertedEntries(client, insertedEntries);
         res.status(400);
@@ -406,6 +411,131 @@ export const postNewClientDetails = async (
     res.write(JSON.stringify({ message: "Unable to insert into clients." }));
     next();
     return;
+  }
+
+  res.status(200);
+  next();
+};
+
+export const updateClientDetails = async (
+  req: Request,
+  res: Response,
+  next: any
+) => {
+  const client = req.body.awsClient;
+  const clientDetails = req.body.clientDetails;
+
+  let query: QueryProps = {
+    name: "getClientEntry",
+    text: "SELECT * FROM clients WHERE id=$1;",
+    values: [clientDetails.id],
+  };
+  let { code, rows } = await performQuery(client, query);
+  if (code !== 200) {
+    res.status(400);
+    res.write(JSON.stringify({ message: "Failed to get client entries." }));
+    next();
+    return;
+  }
+  let entries = rows[0];
+
+  for (let tabData of clientDetails.tabs) {
+    // Get the list of column names and values to insert.
+    let updateString = "";
+    let updateIndex = 1;
+    let insertNames: string = `${tabData.name}_id, `;
+    let valuePlaceholders: string = "$1, ";
+    let values: (string | boolean)[] = [];
+    let insertIndex = 2;
+    for (let fieldData of tabData.fields) {
+      if (
+        fieldData.required &&
+        (fieldData.value === "" || fieldData.value === "---")
+      ) {
+        res.status(400);
+        res.write(
+          JSON.stringify({
+            message: `The required parameter ${fieldData.label} was not set`,
+          })
+        );
+        next();
+        return;
+      }
+
+      updateString += fieldData.name + " = $" + updateIndex + ", ";
+      insertNames += fieldData.name + ", ";
+      valuePlaceholders += `$${insertIndex}, `;
+      insertIndex++;
+      updateIndex++;
+      values.push(
+        fieldData.value === "---" ? fieldData.options[1] : fieldData.value
+      );
+    }
+
+    updateString = updateString.substring(0, updateString.length - 2);
+    insertNames = insertNames.substring(0, insertNames.length - 2);
+    valuePlaceholders = valuePlaceholders.substring(
+      0,
+      valuePlaceholders.length - 2
+    );
+
+    if (entries[tabData.name]) {
+      // Update the existing values.
+      let query: QueryProps = {
+        name: `update${tabData.name}Entry`,
+        text: `UPDATE ${tabData.name} SET ${updateString} WHERE ${
+          tabData.name
+        }_id = '${entries[tabData.name]}';`,
+        values: values,
+      };
+      let { code, rows } = await performQuery(client, query);
+      if (code !== 200) {
+        res.status(400);
+        res.write(
+          JSON.stringify({
+            message: `Failed to update values for ${tabData.name}`,
+          })
+        );
+        next();
+        return;
+      }
+    } else {
+      // Create a new id for the entry.
+      let entryId = uuidv4();
+      values.splice(0, 0, entryId);
+
+      let query: QueryProps = {
+        name: `insert${tabData.name}Entry`,
+        text: `INSERT INTO ${tabData.name} (${insertNames}) VALUES (${valuePlaceholders});`,
+        values: values,
+      };
+      let { code, rows } = await performQuery(client, query);
+      if (code !== 200) {
+        res.status(400);
+        res.write(
+          JSON.stringify({ message: `Unable to insert into ${tabData.name}.` })
+        );
+        next();
+        return;
+      }
+
+      query = {
+        name: `insert${tabData.name}ToClients`,
+        text: `UPDATE clients SET ${tabData.name} = '${entryId}' WHERE id = '${clientDetails.id}';`,
+        values: [],
+      };
+      ({ code, rows } = await performQuery(client, query));
+      if (code !== 200) {
+        res.status(400);
+        res.write(
+          JSON.stringify({
+            message: `Couldn't relate ${tabData.name} entry to clients.`,
+          })
+        );
+        next();
+        return;
+      }
+    }
   }
 
   res.status(200);
