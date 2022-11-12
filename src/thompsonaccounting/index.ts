@@ -328,7 +328,7 @@ export const postNewClientDetails = async (
   next: any
 ) => {
   const client = req.body.awsClient;
-  const newClientTabs = req.body.formData as ClientDetailsTab[];
+  const newClient = req.body.formData as ClientDetails;
 
   const insertedEntries: InsertedEntry[] = [];
 
@@ -338,7 +338,7 @@ export const postNewClientDetails = async (
   let foreignIndex = 2;
 
   // Write an entry to each auxiliary table.
-  for (let tabData of newClientTabs) {
+  for (let tabData of newClient.tabs) {
     foreignPlaceholders.push(`$${foreignIndex}`);
     foreignIndex++;
     // Get the list of column names and values to insert.
@@ -365,7 +365,13 @@ export const postNewClientDetails = async (
       insertNames += fieldData.name + ", ";
       valuePlaceholders += `$${index}, `;
       index++;
-      values.push(fieldData.value);
+      values.push(
+        fieldData.value === "---"
+          ? fieldData.options
+            ? fieldData.options[1]
+            : ""
+          : fieldData.value
+      );
     }
     insertNames = insertNames.substring(0, insertNames.length - 2);
     valuePlaceholders = valuePlaceholders.substring(
@@ -378,6 +384,10 @@ export const postNewClientDetails = async (
     foreignNames.push(tabData.name);
     foreignKeys.push(tableId);
 
+    console.log(
+      `INSERT INTO ${tabData.name} (${insertNames}) VALUES (${valuePlaceholders});`
+    );
+    console.log(values);
     let query: QueryProps = {
       name: `insert${tabData.name}Entry`,
       text: `INSERT INTO ${tabData.name} (${insertNames}) VALUES (${valuePlaceholders});`,
@@ -393,6 +403,8 @@ export const postNewClientDetails = async (
       next();
       return;
     }
+    console.log(foreignNames);
+    console.log(foreignKeys);
 
     insertedEntries.push({
       tableName: tabData.name,
@@ -401,6 +413,12 @@ export const postNewClientDetails = async (
   }
 
   // Write the entry to the main clients table.
+  console.log(
+    `INSERT INTO clients (${foreignNames.join(
+      ", "
+    )}) VALUES (${foreignPlaceholders.join(", ")});`
+  );
+  console.log(foreignKeys);
   let query: QueryProps = {
     name: "insertClientEntry",
     text: `INSERT INTO clients (${foreignNames.join(
