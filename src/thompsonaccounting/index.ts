@@ -334,7 +334,6 @@ export const postNewClientDetails = async (
 
   // Write an entry to each auxiliary table.
   for (let tabData of newClientTabs) {
-    console.log(tabData.name);
     foreignPlaceholders.push(`$${foreignIndex}`);
     foreignIndex++;
     // Get the list of column names and values to insert.
