@@ -312,8 +312,13 @@ export const getNewClientSchema = async (
     });
   }
 
+  let clientDetails: ClientDetails = {
+    id: "",
+    tabs: clientDetailsSchema,
+  };
+
   res.status(200);
-  res.write(JSON.stringify(clientDetailsSchema));
+  res.write(JSON.stringify(clientDetails));
   next();
 };
 
