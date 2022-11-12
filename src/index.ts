@@ -223,6 +223,7 @@ app.post("/inventory/move", inventory.moveElement);
 app.get("/thompsonaccounting/clients", accounting.getClientDetails);
 app.get("/thompsonaccounting/clients/new", accounting.getNewClientSchema);
 app.post("/thompsonaccounting/clients/new", accounting.postNewClientDetails);
+app.put("/thompsonaccounting/clients", accounting.updateClientDetails);
 app.get("/thompsonaccounting/tabs", accounting.getAllTabs);
 app.post("/thompsonaccounting/tabs", accounting.createTab);
 app.put("/thompsonaccounting/tabs", accounting.updateTabName);
