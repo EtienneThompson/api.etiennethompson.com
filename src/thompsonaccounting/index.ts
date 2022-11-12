@@ -384,10 +384,6 @@ export const postNewClientDetails = async (
     foreignNames.push(tabData.name);
     foreignKeys.push(tableId);
 
-    console.log(
-      `INSERT INTO ${tabData.name} (${insertNames}) VALUES (${valuePlaceholders});`
-    );
-    console.log(values);
     let query: QueryProps = {
       name: `insert${tabData.name}Entry`,
       text: `INSERT INTO ${tabData.name} (${insertNames}) VALUES (${valuePlaceholders});`,
@@ -403,8 +399,6 @@ export const postNewClientDetails = async (
       next();
       return;
     }
-    console.log(foreignNames);
-    console.log(foreignKeys);
 
     insertedEntries.push({
       tableName: tabData.name,
@@ -413,12 +407,6 @@ export const postNewClientDetails = async (
   }
 
   // Write the entry to the main clients table.
-  console.log(
-    `INSERT INTO clients (${foreignNames.join(
-      ", "
-    )}) VALUES (${foreignPlaceholders.join(", ")});`
-  );
-  console.log(foreignKeys);
   let query: QueryProps = {
     name: "insertClientEntry",
     text: `INSERT INTO clients (${foreignNames.join(
