@@ -526,6 +526,9 @@ export const updateClientDetails = async (
       };
       ({ code, rows } = await performQuery(client, query));
       if (code !== 200) {
+        deleteInsertedEntries(client, [
+          { tableName: tabData.Name, id: entryId },
+        ]);
         res.status(400);
         res.write(
           JSON.stringify({
