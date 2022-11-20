@@ -14,7 +14,7 @@ import * as mockApplicationUsers from "./admin/ApplicationUsers/mocks";
 import * as inventory from "./inventory";
 import * as accounting from "./thompsonaccounting";
 
-require("dotenv").config();
+require("dotenv").config({ path: `./.env.${process.env.APP_ENV}` });
 const cors = require("cors");
 const fileUpload = require("express-fileupload");
 

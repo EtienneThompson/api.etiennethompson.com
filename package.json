@@ -3,8 +3,9 @@
   "version": "1.0.0",
   "description": "The back end services for my personal website.",
   "scripts": {
-    "dev": "nodemon --watch 'src/**/*.ts' --exec 'ts-node' src/index.ts",
-    "build": "tsc",
+    "dev": "APP_ENV=local nodemon --watch 'src/**/*.ts' --exec 'ts-node' src/index.ts",
+    "build-ppe": "APP_ENV=development tsc",
+    "build": "APP_ENV=production tsc",
     "start": "node dist/index.js"
   },
   "repository": "https://github.com/EtienneThompson/api.etiennethompson.com.git",
