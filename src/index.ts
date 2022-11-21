@@ -40,7 +40,7 @@ const requestFactory = async (
   next();
 };
 
-// Allow requests from this endpoint.
+// Allow requests from these endpoints.
 var corsOptions = {
   origin: [
     "http://localhost:3000",
