@@ -50,6 +50,8 @@ var corsOptions = {
     "http://login.etiennethompson.com",
     "http://admin.etiennethompson.com",
     "http://inventory.etiennethompson.com",
+    "https://vivtho5.dreamhosters.com",
+    "https://cms.vivianethompson.com",
   ],
 };
 app.use(cors(corsOptions));
