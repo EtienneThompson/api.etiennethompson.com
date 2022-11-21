@@ -12,6 +12,9 @@
   "author": "Etienne Thompson <et@etiennethompson.com>",
   "license": "MIT",
   "private": false,
+  "engines": {
+    "node": "16.x"
+  },
   "dependencies": {
     "@types/aws-sdk": "^2.7.0",
     "@types/express": "^4.17.12",
