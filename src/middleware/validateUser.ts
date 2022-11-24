@@ -38,6 +38,7 @@ export const validateUser = async (req: Request, res: Response, next: any) => {
     res
       .status(400)
       .send({ message: "Your session has expired. Please login again." });
+    return;
   }
 
   let userid = (rows[0] as UserEntry).userid;
