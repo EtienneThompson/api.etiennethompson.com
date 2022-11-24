@@ -328,7 +328,7 @@ export const postNewClientDetails = async (
   next: any
 ) => {
   const client = req.body.awsClient;
-  const newClientTabs = req.body.formData as ClientDetailsTab[];
+  const newClient = req.body.formData as ClientDetails;
 
   const insertedEntries: InsertedEntry[] = [];
 
@@ -338,7 +338,7 @@ export const postNewClientDetails = async (
   let foreignIndex = 2;
 
   // Write an entry to each auxiliary table.
-  for (let tabData of newClientTabs) {
+  for (let tabData of newClient.tabs) {
     foreignPlaceholders.push(`$${foreignIndex}`);
     foreignIndex++;
     // Get the list of column names and values to insert.
@@ -365,7 +365,13 @@ export const postNewClientDetails = async (
       insertNames += fieldData.name + ", ";
       valuePlaceholders += `$${index}, `;
       index++;
-      values.push(fieldData.value);
+      values.push(
+        fieldData.value === "---"
+          ? fieldData.options
+            ? fieldData.options[1]
+            : ""
+          : fieldData.value
+      );
     }
     insertNames = insertNames.substring(0, insertNames.length - 2);
     valuePlaceholders = valuePlaceholders.substring(

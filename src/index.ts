@@ -14,7 +14,7 @@ import * as mockApplicationUsers from "./admin/ApplicationUsers/mocks";
 import * as inventory from "./inventory";
 import * as accounting from "./thompsonaccounting";
 
-require("dotenv").config();
+require("dotenv").config({ path: `./.env.${process.env.APP_ENV}` });
 const cors = require("cors");
 const fileUpload = require("express-fileupload");
 
@@ -40,7 +40,7 @@ const requestFactory = async (
   next();
 };
 
-// Allow requests from this endpoint.
+// Allow requests from these endpoints.
 var corsOptions = {
   origin: [
     "http://localhost:3000",
@@ -50,6 +50,8 @@ var corsOptions = {
     "http://login.etiennethompson.com",
     "http://admin.etiennethompson.com",
     "http://inventory.etiennethompson.com",
+    "https://vivtho5.dreamhosters.com",
+    "https://cms.vivianethompson.com",
   ],
 };
 app.use(cors(corsOptions));
