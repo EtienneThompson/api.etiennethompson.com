@@ -6,6 +6,9 @@ export const getTableSchema = async (
   client: Client,
   tableName: string
 ): Promise<ColumnSchemaInfo[]> => {
+  console.log(
+    `SELECT column_name, data_type, udt_name, is_nullable FROM information_schema.columns WHERE table_name=${tableName};`
+  );
   const query: QueryProps = {
     name: "GetTableSchema",
     text: "SELECT column_name, data_type, udt_name, is_nullable FROM information_schema.columns WHERE table_name=$1;",

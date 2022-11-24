@@ -739,6 +739,7 @@ export const getAllFields = async (req: Request, res: Response, next: any) => {
   let allFieldNames: string[] = [];
 
   for (let tableName of tableNames) {
+    console.log(tableName.column_name);
     let fieldNames = await getTableSchema(client, tableName.column_name);
     console.log(fieldNames);
     fieldNames = fieldNames.slice(1) as ColumnSchemaInfo[];
