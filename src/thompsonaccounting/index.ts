@@ -740,6 +740,7 @@ export const getAllFields = async (req: Request, res: Response, next: any) => {
 
   for (let tableName of tableNames) {
     let fieldNames = await getTableSchema(client, tableName.column_name);
+    console.log(fieldNames);
     fieldNames = fieldNames.slice(1) as ColumnSchemaInfo[];
     allFieldNames = allFieldNames.concat(
       fieldNames.map((name) => capitalizeName(name.column_name))
