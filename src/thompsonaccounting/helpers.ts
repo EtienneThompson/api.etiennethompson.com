@@ -8,7 +8,7 @@ export const getTableSchema = async (
 ): Promise<ColumnSchemaInfo[]> => {
   const query: QueryProps = {
     name: "GetTableSchema",
-    text: "SELECT column_name, data_type, udt_name, is_nullable FROM information_schema.columns WHERE table_name='$1';",
+    text: "SELECT column_name, data_type, udt_name, is_nullable FROM information_schema.columns WHERE table_name=$1;",
     values: [tableName],
   };
   const { code, rows } = await performQuery(client, query);
