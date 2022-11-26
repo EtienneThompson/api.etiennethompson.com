@@ -1,7 +1,7 @@
 import express, { Request, Response } from "express";
 import { exceptionLogging } from "./middleware/exceptionLogging";
 import { createDatabaseConnection } from "./middleware/createDatabaseConnection";
-import { closeDatabaseConnection } from "./middleware/closeDatabaseConnection";
+import { closeDatabaseConnectionMiddleware } from "./middleware/closeDatabaseConnection";
 import { validateUser } from "./middleware/validateUser";
 import { loginHandler } from "./login";
 import * as dashboard from "./admin/Dashboard";
@@ -235,7 +235,7 @@ app.get("/thompsonaccounting/field/schema", accounting.getFieldSchema);
 app.get("/thompsonaccounting/allfields", accounting.getAllFields);
 app.post("/thompsonaccounting/fields", accounting.createField);
 
-app.use(closeDatabaseConnection);
+app.use(closeDatabaseConnectionMiddleware);
 
 app.listen(port, () => {
   return console.log(`Server is listening on port ${port}`);
