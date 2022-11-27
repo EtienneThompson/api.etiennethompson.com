@@ -156,7 +156,7 @@ const getSingleClientDetails = async (
     });
   }
 
-  client.end();
+  await client.end();
 
   return {
     id: entry.id,
@@ -330,6 +330,22 @@ export const postNewClientDetails = async (
   const client = req.body.awsClient;
   const newClient = req.body.formData as ClientDetails;
 
+  // Validate all required parameters are set.
+  for (let tab of newClient.tabs) {
+    for (let field of tab.fields) {
+      if (field.required && (field.value === "" || field.value === "---")) {
+        res.status(400);
+        res.write(
+          JSON.stringify({
+            message: `The required parameter ${field.label} was not entered.`,
+          })
+        );
+        next();
+        return;
+      }
+    }
+  }
+
   const insertedEntries: InsertedEntry[] = [];
 
   let foreignNames: string[] = ["id"];
@@ -347,21 +363,6 @@ export const postNewClientDetails = async (
     let values: (string | boolean)[] = [];
     let index = 2;
     for (let fieldData of tabData.fields) {
-      if (
-        fieldData.required &&
-        (fieldData.value === "" || fieldData.value === "---")
-      ) {
-        await deleteInsertedEntries(client, insertedEntries);
-        res.status(400);
-        res.write(
-          JSON.stringify({
-            message: `The required parameter ${fieldData.label} was not set`,
-          })
-        );
-        next();
-        return;
-      }
-
       insertNames += fieldData.name + ", ";
       valuePlaceholders += `$${index}, `;
       index++;
@@ -433,7 +434,23 @@ export const updateClientDetails = async (
   next: any
 ) => {
   const client = req.body.awsClient;
-  const clientDetails = req.body.clientDetails;
+  const clientDetails = req.body.clientDetails as ClientDetails;
+
+  // Validate all required parameters are set.
+  for (let tab of clientDetails.tabs) {
+    for (let field of tab.fields) {
+      if (field.required && (field.value === "" || field.value === "---")) {
+        res.status(400);
+        res.write(
+          JSON.stringify({
+            message: `The required parameter ${field.label} was not entered.`,
+          })
+        );
+        next();
+        return;
+      }
+    }
+  }
 
   let query: QueryProps = {
     name: "getClientEntry",
@@ -458,27 +475,15 @@ export const updateClientDetails = async (
     let values: (string | boolean)[] = [];
     let insertIndex = 2;
     for (let fieldData of tabData.fields) {
-      if (
-        fieldData.required &&
-        (fieldData.value === "" || fieldData.value === "---")
-      ) {
-        res.status(400);
-        res.write(
-          JSON.stringify({
-            message: `The required parameter ${fieldData.label} was not set`,
-          })
-        );
-        next();
-        return;
-      }
-
       updateString += fieldData.name + " = $" + updateIndex + ", ";
       insertNames += fieldData.name + ", ";
       valuePlaceholders += `$${insertIndex}, `;
       insertIndex++;
       updateIndex++;
       values.push(
-        fieldData.value === "---" ? fieldData.options[1] : fieldData.value
+        fieldData.value === "---" && fieldData.options
+          ? fieldData.options[1]
+          : fieldData.value
       );
     }
 
@@ -537,7 +542,7 @@ export const updateClientDetails = async (
       ({ code, rows } = await performQuery(client, query));
       if (code !== 200) {
         deleteInsertedEntries(client, [
-          { tableName: tabData.Name, id: entryId },
+          { tableName: tabData.name, id: entryId },
         ]);
         res.status(400);
         res.write(
