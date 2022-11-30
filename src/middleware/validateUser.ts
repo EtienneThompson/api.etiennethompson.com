@@ -40,7 +40,7 @@ export const validateUser = async (req: Request, res: Response, next: any) => {
     values: [reqBody.clientid],
   };
   let { code, rows } = await performQuery(client, query);
-  if (code !== 200) {
+  if (code !== 200 || rows.length === 0) {
     await closeDatabaseConnection(req);
     res.status(401).send({
       reason: AuthenticationFailureReason.InvalidClientId,
@@ -71,7 +71,7 @@ export const validateUser = async (req: Request, res: Response, next: any) => {
   };
   ({ code, rows } = await performQuery(client, query));
 
-  if (code !== 200) {
+  if (code !== 200 || rows.length === 0) {
     await closeDatabaseConnection(req);
     res.status(401).send({
       reason: AuthenticationFailureReason.InvalidAppId,
@@ -87,7 +87,7 @@ export const validateUser = async (req: Request, res: Response, next: any) => {
   };
   ({ code, rows } = await performQuery(client, query));
 
-  if (code !== 200) {
+  if (code !== 200 || rows.length === 0) {
     await closeDatabaseConnection(req);
     res.status(401).send({
       reason: AuthenticationFailureReason.InvalidUser,
