@@ -234,6 +234,7 @@ app.get("/thompsonaccounting/field", accounting.getFieldsForTab);
 app.get("/thompsonaccounting/field/schema", accounting.getFieldSchema);
 app.get("/thompsonaccounting/allfields", accounting.getAllFields);
 app.post("/thompsonaccounting/fields", accounting.createField);
+app.delete("/thompsonaccounting/field", accounting.deleteField);
 
 app.use(closeDatabaseConnectionMiddleware);
 
