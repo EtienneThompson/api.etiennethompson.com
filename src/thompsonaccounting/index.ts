@@ -967,3 +967,28 @@ export const updateField = (req: Request, res: Response, next: any) => {
   res.status(400);
   next();
 };
+
+export const deleteField = async (req: Request, res: Response, next: any) => {
+  const client = req.body.awsClient;
+
+  const tabName = createColumnName(req.body.tabName);
+  const fieldName = createColumnName(req.body.fieldName);
+
+  let query: QueryProps = {
+    name: `drop${fieldName}Column`,
+    text: `ALTER TABLE ${tabName} DROP COLUMN ${fieldName};`,
+    values: [],
+  };
+  const { code, rows } = await performQuery(client, query);
+  if (code !== 200) {
+    res.status(400);
+    res.write(
+      JSON.stringify({ message: `Failed to delete the field ${fieldName}` })
+    );
+    next();
+    return;
+  }
+
+  res.status(200);
+  next();
+};
