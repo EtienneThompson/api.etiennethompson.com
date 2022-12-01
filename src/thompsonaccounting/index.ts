@@ -974,7 +974,6 @@ export const deleteField = async (req: Request, res: Response, next: any) => {
   const tabName = createColumnName(req.body.tabName);
   const fieldName = createColumnName(req.body.fieldName);
 
-  console.log(`ALTER TABLE ${tabName} DROP COLUMN ${fieldName};`);
   let query: QueryProps = {
     name: `drop${fieldName}Column`,
     text: `ALTER TABLE ${tabName} DROP COLUMN ${fieldName};`,
