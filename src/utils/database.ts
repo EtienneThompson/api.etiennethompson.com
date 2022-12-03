@@ -56,6 +56,13 @@ export const performQuery = async (
   return { code, rows };
 };
 
+export const performFormattedQuery = async (
+  client: Client,
+  sql: string
+): Promise<QueryResponse> => {
+  return await makeSingleQuery(client, sql);
+};
+
 /**
  * Makes a single query and returns the results if there were any.
  * @param client the database to perform the query on.
@@ -64,7 +71,7 @@ export const performQuery = async (
  */
 const makeSingleQuery = async (
   client: Client,
-  query: QueryProps
+  query: QueryProps | string
 ): Promise<QueryResponse> => {
   try {
     const response = await client.query(query);

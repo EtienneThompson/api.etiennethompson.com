@@ -1,10 +1,12 @@
-import { Request, Response } from "express";
+import e, { Request, Response } from "express";
+import { Client } from "pg";
 import { v4 as uuidv4 } from "uuid";
 import { Map } from "../types";
 import {
   QueryProps,
   performQuery,
   connectToAWSDatabase,
+  performFormattedQuery,
 } from "../utils/database";
 import { capitalize, isNullOrWhiteSpace } from "../utils/string";
 import { getEnumTypeValues, getTableSchema } from "./helpers";
@@ -18,6 +20,8 @@ import {
   ColumnSchemaInfo,
   ColumnMap,
 } from "./types";
+
+const format = require("pg-format");
 
 const capitalizeName = (name: string): string => {
   let pieces = name.split("_");
@@ -958,13 +962,137 @@ export const createField = async (req: Request, res: Response, next: any) => {
   next();
 };
 
-export const updateField = (req: Request, res: Response, next: any) => {
-  const client = req.body.awsClient;
-  const tabName = req.body.tabName;
-  const fieldName = req.body.fieldName;
-  const fieldValues = req.body.fieldValues;
+export const updateField = async (req: Request, res: Response, next: any) => {
+  const client: Client = req.body.awsClient;
+  const tabName: string = createColumnName(req.body.tabName);
+  const fieldName: string = createColumnName(req.body.fieldName);
+  const fieldValues: DatabaseColumn = req.body.fieldValues;
 
-  res.status(400);
+  const newFieldName = createColumnName(fieldValues.label);
+
+  let query: QueryProps;
+  // Update name and enum name if there was a change
+  if (fieldName !== newFieldName) {
+    console.log(
+      `ALTER TABLE ${tabName} RENAME COLUMN ${fieldName} TO ${newFieldName};`
+    );
+    // Update the field name.
+    let query: QueryProps = {
+      name: `update${fieldName}Name`,
+      text: `ALTER TABLE ${tabName} RENAME COLUMN ${fieldName} TO ${newFieldName};`,
+      values: [],
+    };
+    let { code, rows } = await performQuery(client, query);
+    if (code !== 200) {
+      res.status(400);
+      res.write(
+        JSON.stringify({
+          message: `Failed to rename the column ${fieldName}.`,
+        })
+      );
+      next();
+      return;
+    }
+
+    console.log(`ALTER TYPE ${fieldName} RENAME TO ${newFieldName};`);
+    query = {
+      name: `update${fieldName}Type`,
+      text: `ALTER TYPE ${fieldName} RENAME TO ${newFieldName};`,
+      values: [],
+    };
+    ({ code, rows } = await performQuery(client, query));
+    if (code !== 200) {
+      res.status(400);
+      res.write(
+        JSON.stringify({ message: `Failed to rename the enum ${fieldName}` })
+      );
+      next();
+      return;
+    }
+  }
+
+  // update the required status of the column.
+  if (fieldValues.required) {
+    console.log("required update");
+    query = {
+      name: `set${newFieldName}Required`,
+      text: `ALTER TABLE ${tabName} ALTER COLUMN ${newFieldName} SET NOT NULL`,
+      values: [],
+    };
+  } else {
+    console.log("not required update");
+    query = {
+      name: `set ${newFieldName}Required`,
+      text: `ALTER TABLE ${tabName} ALTER COLUMN ${newFieldName} DROP NOT NULL`,
+      values: [],
+    };
+  }
+
+  let { code, rows } = await performQuery(client, query);
+  if (code !== 200) {
+    res.status(400);
+    res.write(
+      JSON.stringify({
+        message: `Failed to update required status for column ${newFieldName}`,
+      })
+    );
+    next();
+    return;
+  }
+
+  // If it is a dropdown, update the values if any have changed.
+  // ALTER TYPE enumName ADD VALUE 'newVal' AFTER 'oldVal';
+  if (fieldValues.type === "select") {
+    // Get the possible values for the user defined enum.
+    let query = {
+      name: `get${newFieldName}Values`,
+      text: `SELECT unnest(enum_range(null::${newFieldName}));`,
+      values: [],
+    };
+    let { code, rows } = await performQuery(client, query);
+    if (code !== 200) {
+      res.status(404);
+      res.write(
+        JSON.stringify({ message: "User defined enum not found in database." })
+      );
+      next();
+      return;
+    }
+
+    let options = rows.map((row) => row.unnest);
+
+    // If there are no values or no new values, don't do anything.
+    if (!fieldValues.options || options.length >= fieldValues.options.length) {
+      res.status(200);
+      next();
+      return;
+    }
+
+    fieldValues.options.splice(0, 1);
+
+    for (let i = options.length; i < fieldValues.options.length; i++) {
+      // for each element fieldValues.options.length[i] add it to the enum list after the last value.
+      var sql = format(
+        "ALTER TYPE %I ADD VALUE '%s' AFTER '%s';",
+        newFieldName,
+        fieldValues.options[i],
+        fieldValues.options[i - 1]
+      );
+      ({ code, rows } = await performFormattedQuery(client, sql));
+      if (code !== 200) {
+        res.status(400);
+        res.write(
+          JSON.stringify({
+            message: `Couldn't add the value ${fieldValues.options[i]} to the enum ${newFieldName}`,
+          })
+        );
+        next();
+        return;
+      }
+    }
+  }
+
+  res.status(200);
   next();
 };
 
