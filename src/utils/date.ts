@@ -19,7 +19,7 @@ const monthWords = [
  */
 export const createExpiration = (): string => {
   let now = new Date();
-  now.setHours(now.getHours() + 2);
+  now.setHours(now.getHours() + 8);
   let expiration = now.toISOString();
   expiration = expiration.replace("T", " ").split(".")[0];
   return expiration;
