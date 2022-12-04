@@ -623,15 +623,11 @@ export const updateTabName = async (
   next: any
 ) => {
   const client = req.body.awsClient;
-  const currentName = req.body.currentName;
-  const newName = req.body.newName;
+  const currentName = createColumnName(req.body.currentName);
+  const newName = createColumnName(req.body.newName);
 
-  let query: QueryProps = {
-    name: "renameColumn",
-    text: `ALTER TABLE ${currentName} RENAME TO ${newName};`,
-    values: [],
-  };
-  let { code, rows } = await performQuery(client, query);
+  let sql = format("ALTER TABLE %I RENAME TO %s;", currentName, newName);
+  let { code, rows } = await performFormattedQuery(client, sql);
   if (code !== 200) {
     res.status(400);
     res.write(
@@ -644,12 +640,9 @@ export const updateTabName = async (
   }
 
   // ALTER TABLE ${newName} RENAME CONSTRAINT ${currentName}_pkey TO ${newName}_pkey;
-  query = {
-    name: "renameColumnPrimaryKey",
-    text: `ALTER TABLE ${newName} RENAME CONSTRAINT ${currentName}_pkey TO ${newName}_pkey;`,
-    values: [],
-  };
-  ({ code, rows } = await performQuery(client, query));
+  let sqlString = `ALTER TABLE %I RENAME CONSTRAINT ${currentName}_PKEY TO ${newName}_pkey;`;
+  sql = format(sqlString, newName);
+  ({ code, rows } = await performFormattedQuery(client, sql));
   if (code !== 200) {
     res.status(400);
     res.write(
@@ -662,12 +655,9 @@ export const updateTabName = async (
   }
 
   // ALTER TABLE ${newName} RENAME COLUMN ${currentName)_id TO ${newName}_id;
-  query = {
-    name: "renameColumnName",
-    text: `ALTER TABLE ${newName} RENAME COLUMN ${currentName}_id TO ${newName}_id;`,
-    values: [],
-  };
-  ({ code, rows } = await performQuery(client, query));
+  sqlString = `ALTER TABLE %I RENAME COLUMN ${currentName}_id TO ${newName}_id;`;
+  sql = format(sqlString, newName);
+  ({ code, rows } = await performQuery(client, sql));
   if (code !== 200) {
     res.status(400);
     res.write(
@@ -680,12 +670,9 @@ export const updateTabName = async (
   }
 
   // ALTER TABLE clients RENAME COLUMN ${currentName} TO ${newName};
-  query = {
-    name: "renameClientsColumn",
-    text: `ALTER TABLE clients RENAME COLUMN ${currentName} TO ${newName};`,
-    values: [],
-  };
-  ({ code, rows } = await performQuery(client, query));
+  sqlString = `ALTER TABLE clients RENAME COLUMN %s TO %s;`;
+  sql = format(sqlString, currentName, newName);
+  ({ code, rows } = await performQuery(client, sql));
   if (code !== 200) {
     res.status(400);
     res.write(
@@ -973,9 +960,6 @@ export const updateField = async (req: Request, res: Response, next: any) => {
   let query: QueryProps;
   // Update name and enum name if there was a change
   if (fieldName !== newFieldName) {
-    console.log(
-      `ALTER TABLE ${tabName} RENAME COLUMN ${fieldName} TO ${newFieldName};`
-    );
     // Update the field name.
     let query: QueryProps = {
       name: `update${fieldName}Name`,
@@ -994,7 +978,6 @@ export const updateField = async (req: Request, res: Response, next: any) => {
       return;
     }
 
-    console.log(`ALTER TYPE ${fieldName} RENAME TO ${newFieldName};`);
     query = {
       name: `update${fieldName}Type`,
       text: `ALTER TYPE ${fieldName} RENAME TO ${newFieldName};`,
@@ -1013,14 +996,12 @@ export const updateField = async (req: Request, res: Response, next: any) => {
 
   // update the required status of the column.
   if (fieldValues.required) {
-    console.log("required update");
     query = {
       name: `set${newFieldName}Required`,
       text: `ALTER TABLE ${tabName} ALTER COLUMN ${newFieldName} SET NOT NULL`,
       values: [],
     };
   } else {
-    console.log("not required update");
     query = {
       name: `set ${newFieldName}Required`,
       text: `ALTER TABLE ${tabName} ALTER COLUMN ${newFieldName} DROP NOT NULL`,
