@@ -36,7 +36,7 @@ const capitalizeName = (name: string): string => {
 };
 
 const createColumnName = (name: string): string => {
-  let pieces = name.split(" ");
+  let pieces = name.trim().split(" ");
   let ret_string: string = "";
   for (let piece of pieces) {
     ret_string += piece.toLowerCase() + "_";
