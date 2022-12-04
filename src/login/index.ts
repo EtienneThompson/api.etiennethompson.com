@@ -71,8 +71,8 @@ export const loginHandler = async (req: Request, res: Response, next: any) => {
   // Get the user, admin status for the given user for the given application.
   query = {
     name: "loginGetApplicationUsersQuery",
-    text: "SELECT isuser, isadmin FROM applicationusers WHERE userid=$1",
-    values: [userId],
+    text: "SELECT isuser, isadmin FROM applicationusers WHERE userid=$1 AND applicationid=$2",
+    values: [userId, reqBody.appid],
   };
   ({ code, rows } = await performQuery(client, query));
   let isUser: boolean = false;
