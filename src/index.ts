@@ -66,6 +66,7 @@ app.get("/", handler);
 
 // Login routes.
 app.post("/login", loginHandler);
+app.post("/login/reset");
 
 // Admin User routes.
 app.get("/admin/dashboard/count", dashboard.getTableCounts);

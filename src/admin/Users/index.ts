@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { v4 as uuidv4 } from "uuid";
 import { QueryProps, performQuery } from "../../utils/database";
-import { createExpiration } from "../../utils/date";
+import { createHourExpiration } from "../../utils/date";
 import { AdminGetResponseData, DefaultValues } from "../../types";
 import { ReturnUser } from "./types";
 
@@ -87,7 +87,7 @@ export const createUser = async (req: Request, res: Response, next: any) => {
   // Generate new ids and fields for the user.
   const newUserId = uuidv4();
   const newClientId = uuidv4();
-  let expiration = createExpiration();
+  let expiration = createHourExpiration();
 
   // Construct the insert query.
   let query: QueryProps = {

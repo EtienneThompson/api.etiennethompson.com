@@ -1,9 +1,10 @@
 import { Request, Response } from "express";
 import { v4 as uuidv4 } from "uuid";
+import aws from "aws-sdk";
 import { LoginRequest, ApplicationEntry, UserAdminStatus } from "./types";
 import { UserEntry } from "../types";
 import { QueryProps, performQuery } from "../utils/database";
-import { createExpiration } from "../utils/date";
+import { createHourExpiration, createMinuteExpiration } from "../utils/date";
 
 export const loginHandler = async (req: Request, res: Response, next: any) => {
   const client = req.body.client;
@@ -98,7 +99,7 @@ export const loginHandler = async (req: Request, res: Response, next: any) => {
   if (diff < 0) {
     // Generate a new clientId for the user.
     retClientId = uuidv4();
-    const expiration = createExpiration();
+    const expiration = createHourExpiration();
     query = {
       text: "UPDATE users SET clientid=$1, session_expiration=$2 WHERE userid=$3;",
       values: [retClientId, expiration, userId],
@@ -114,7 +115,7 @@ export const loginHandler = async (req: Request, res: Response, next: any) => {
   } else {
     // Use the existing clientId.
     retClientId = clientId;
-    const expiration = createExpiration();
+    const expiration = createHourExpiration();
     query = {
       text: "UPDATE users SET session_expiration=$1 WHERE userid=$2;",
       values: [expiration, userId],
@@ -138,4 +139,58 @@ export const loginHandler = async (req: Request, res: Response, next: any) => {
     })
   );
   next();
+};
+
+export const sendResetPasswordEmail = async (
+  req: Request,
+  res: Response,
+  next: any
+) => {
+  const client = req.body.client;
+  var email = req.body.email;
+
+  // Lookup that the email entered is associated with an account.
+  let query: QueryProps = {
+    name: "LookupUserByEmail",
+    text: "SELECT userid, username FROM users WHERE email=$1;",
+    values: [email],
+  };
+  let { code, rows } = await performQuery(client, query);
+  if (code !== 200 || rows.length === 0) {
+    res.status(400);
+    res.write(
+      JSON.stringify({ message: "Couldn't find a user with that email" })
+    );
+    next();
+    return;
+  }
+
+  // Generate a random UUID for the code and generate the expiration for 15
+  // minutes in the future.
+  var resetCode = uuidv4();
+  var expiration = createMinuteExpiration(15);
+
+  query = {
+    name: "SetResetCode",
+    text: "UPDATE users SET reset_code=$1, reset_expiration=$2 WHERE email=$3;",
+    values: [resetCode, expiration, email],
+  };
+  ({ code, rows } = await performQuery(client, query));
+  if (code !== 200) {
+    res.status(400);
+    res.write(
+      JSON.stringify({
+        message: "Failed to set the reset code and expiration.",
+      })
+    );
+    next();
+    return;
+  }
+
+  // Send the email with the reset link.
+  var link = `${process.env.SITE_URL}/reset_password?code=${resetCode}`;
+  aws.config.update({
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+  });
 };

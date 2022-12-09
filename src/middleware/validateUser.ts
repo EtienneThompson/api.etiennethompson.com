@@ -13,7 +13,7 @@ enum AuthenticationFailureReason {
 }
 
 export const validateUser = async (req: Request, res: Response, next: any) => {
-  if (req.path === "/login") {
+  if (req.path.includes("/login")) {
     next();
     return;
   }
