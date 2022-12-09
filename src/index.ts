@@ -57,6 +57,14 @@ var corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json());
 app.use(fileUpload());
+app.use(function (req, res, next) {
+  res.setTimeout(60000, function () {
+    console.log("Request has timed out.");
+    res.send(408);
+  });
+
+  next();
+});
 app.use(exceptionLogging);
 app.use(createDatabaseConnection);
 app.use(validateUser);
