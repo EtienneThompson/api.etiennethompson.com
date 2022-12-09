@@ -203,18 +203,45 @@ export const getClientDetails = async (
     return;
   }
 
-  let clientEntries = rows;
-
+  let allClientDetails: ClientDetails[] = [];
   let promises: Promise<ClientDetails>[] = [];
-  for (let entry of clientEntries) {
-    let clientDetailsPromise = getSingleClientDetails(entry, tableNames);
+  let clientDetails: ClientDetails[] = [];
+  let clientEntries = rows;
+  let totalEntries = clientEntries.length;
+  let index = 0;
+
+  // Get all client entries, 16 at a time.
+  while (index + 4 < totalEntries) {
+    for (let i = 0; i < 4; i++) {
+      let clientDetailsPromise = getSingleClientDetails(
+        clientEntries[index + i],
+        tableNames
+      );
+      promises.push(clientDetailsPromise);
+    }
+
+    let clientDetails = await Promise.all(promises);
+    promises = [];
+    allClientDetails = allClientDetails.concat(clientDetails);
+
+    index += 4;
+  }
+
+  // Get any remaining entries.
+  for (let i = 0; i < totalEntries - index; i++) {
+    let clientDetailsPromise = getSingleClientDetails(
+      clientEntries[index + i],
+      tableNames
+    );
     promises.push(clientDetailsPromise);
   }
 
-  let clientDetails = await Promise.all(promises);
+  clientDetails = await Promise.all(promises);
+  allClientDetails = allClientDetails.concat(clientDetails);
+  clientDetails = [];
 
   res.status(200);
-  res.write(JSON.stringify(clientDetails));
+  res.write(JSON.stringify(allClientDetails));
   next();
 };
 
