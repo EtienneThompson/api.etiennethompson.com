@@ -209,10 +209,11 @@ export const getClientDetails = async (
   let clientEntries = rows;
   let totalEntries = clientEntries.length;
   let index = 0;
+  const maxConsecutiveThreads = 8;
 
   // Get all client entries, 16 at a time.
-  while (index + 4 < totalEntries) {
-    for (let i = 0; i < 4; i++) {
+  while (index + maxConsecutiveThreads < totalEntries) {
+    for (let i = 0; i < maxConsecutiveThreads; i++) {
       let clientDetailsPromise = getSingleClientDetails(
         clientEntries[index + i],
         tableNames
@@ -224,7 +225,7 @@ export const getClientDetails = async (
     promises = [];
     allClientDetails = allClientDetails.concat(clientDetails);
 
-    index += 4;
+    index += maxConsecutiveThreads;
   }
 
   // Get any remaining entries.
