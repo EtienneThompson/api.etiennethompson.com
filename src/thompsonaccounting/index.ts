@@ -79,7 +79,6 @@ const getSingleClientDetails = async (
   let joinString = joinConditions.join(" ");
 
   let sql = `SELECT ${selectString} FROM clients ${joinString};`;
-  console.log(sql);
 
   for (let tableName of tableNames) {
     let tableSchema = await getTableSchema(client, tableName.column_name);
@@ -184,7 +183,6 @@ export const getClientDetails = async (
   }
 
   let tableNames = schema.tabs.map((tab) => tab.name);
-  console.log(tableNames);
 
   let selectConditions: string[] = ["clients.*"];
   let joinConditions: string[] = [];
@@ -202,7 +200,6 @@ export const getClientDetails = async (
   let joinString = joinConditions.join(" ");
 
   let sql = `SELECT ${selectString} FROM clients ${joinString};`;
-  console.log(sql);
 
   let { code, rows } = await performFormattedQuery(client, sql);
   if (code !== 200 || rows.length === 0) {
@@ -253,8 +250,6 @@ export const getNewClientSchema = async (
     next();
     return;
   }
-
-  console.log(schema);
 
   res.status(200);
   res.write(JSON.stringify(schema));
