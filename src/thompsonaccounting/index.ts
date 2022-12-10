@@ -9,7 +9,13 @@ import {
   performFormattedQuery,
 } from "../utils/database";
 import { capitalize, isNullOrWhiteSpace } from "../utils/string";
-import { getEnumTypeValues, getTableSchema } from "./helpers";
+import {
+  capitalizeName,
+  createColumnName,
+  getClientSchema,
+  getEnumTypeValues,
+  getTableSchema,
+} from "./helpers";
 import {
   ClientDetails,
   ClientDetailsTab,
@@ -22,29 +28,6 @@ import {
 } from "./types";
 
 const format = require("pg-format");
-
-const capitalizeName = (name: string): string => {
-  let pieces = name.split("_");
-  let ret_string: string = "";
-  for (let piece of pieces) {
-    piece = capitalize(piece);
-    ret_string += piece + " ";
-  }
-
-  ret_string = ret_string.substring(0, ret_string.length - 1);
-  return ret_string;
-};
-
-const createColumnName = (name: string): string => {
-  let pieces = name.trim().split(" ");
-  let ret_string: string = "";
-  for (let piece of pieces) {
-    ret_string += piece.toLowerCase() + "_";
-  }
-
-  ret_string = ret_string.substring(0, ret_string.length - 1);
-  return ret_string;
-};
 
 const deleteInsertedEntries = async (
   client: any,
@@ -69,105 +52,6 @@ const deleteInsertedEntries = async (
   }
 };
 
-const getSingleClientDetails = async (
-  entry: Map,
-  tableNames: ColumnSchemaInfo[]
-): Promise<ClientDetails> => {
-  let client = await connectToAWSDatabase(
-    process.env.THOMPSON_ACCOUNTING_DATABASE_HOST as string,
-    process.env.THOMPSON_ACCOUNTING_DATABASE_USER as string,
-    process.env.THOMPSON_ACCOUNTING_DATABASE_PASSWORD as string,
-    process.env.THOMPSON_ACCOUNTING_DATABASE_DATABASE as string
-  );
-  const clientDetailsTabs: ClientDetailsTab[] = [];
-
-  // Get the schema for each table related to clients.
-  for (let tableName of tableNames) {
-    let tableSchema = await getTableSchema(client, tableName.column_name);
-
-    let tableValues: ColumnMap = {};
-    if (!isNullOrWhiteSpace(entry[tableName.column_name])) {
-      let query = {
-        name: `get${tableName.column_name}Entries`,
-        text: `SELECT * FROM ${tableName.column_name} WHERE ${tableName.column_name}_id = $1`,
-        values: [entry[tableName.column_name]],
-      };
-      let { code, rows } = await performQuery(client, query);
-      if (code !== 200) {
-        throw new Error("Couldn't get the details for a client.");
-      }
-      tableValues = rows[0];
-    }
-
-    let fields: DatabaseColumn[] = [];
-
-    let index = 0;
-    // Convert the database schema to the UI schema.
-    for (let field of tableSchema) {
-      // Skip any id fields.
-      if (field.column_name.endsWith("id")) {
-        continue;
-      }
-
-      // Get type and default value based on data type.
-      let type: ColumnType;
-      let value =
-        Object.keys(tableValues).length > 0
-          ? tableValues[field.column_name]
-          : field.data_type === "USER-DEFINED"
-          ? "---"
-          : field.data_type === "boolean"
-          ? false
-          : "";
-      let options: string[] | undefined;
-      switch (field.data_type) {
-        case "character varying":
-          type = "text";
-          break;
-        case "boolean":
-          type = "checkbox";
-          break;
-        case "text":
-          type = "textarea";
-          break;
-        case "USER-DEFINED":
-          type = "select";
-          // Get the possible values for the user defined enum.
-          options = await getEnumTypeValues(client, field.udt_name);
-          break;
-        default:
-          type = "text";
-          break;
-      }
-
-      let fieldSchema: DatabaseColumn = {
-        name: field.column_name,
-        label: capitalizeName(field.column_name),
-        required: field.is_nullable === IsNullable.No,
-        type: type,
-        value: value,
-        options: options,
-      };
-      fields.push(fieldSchema);
-
-      index++;
-    }
-
-    clientDetailsTabs.push({
-      name: tableName.column_name,
-      label: capitalizeName(tableName.column_name),
-      fields: fields,
-    });
-  }
-
-  await client.end();
-
-  return {
-    id: entry.id,
-    tabs: clientDetailsTabs,
-  };
-};
-
 export const getClientDetails = async (
   req: Request,
   res: Response,
@@ -175,71 +59,62 @@ export const getClientDetails = async (
 ) => {
   const client = req.body.awsClient;
 
-  // Get all column names other than the id field.
-  let tableNames;
-  try {
-    tableNames = await getTableSchema(client, "clients");
-  } catch (e: any) {
+  let schema = await getClientSchema(client);
+
+  if (schema === undefined) {
     res.status(400);
-    res.write(JSON.stringify({ message: e.message }));
+    res.write(JSON.stringify({ message: "Failed to get client schema. " }));
     next();
     return;
   }
-  tableNames = tableNames.slice(1);
 
-  // Get all the entries in the clients database.
-  let query: QueryProps = {
-    name: "getClientEntries",
-    text: "SELECT * from clients;",
-    values: [],
-  };
-  let { code, rows } = await performQuery(client, query);
-  if (code !== 200) {
-    res.status(400);
-    res.write(
-      JSON.stringify({ message: "The clients entries couldn't be fetched." })
+  let tableNames = schema.tabs.map((tab) => tab.name);
+
+  let selectConditions: string[] = ["clients.*"];
+  let joinConditions: string[] = [];
+  // Get the schema for each table related to clients.
+
+  for (let i = 0; i < tableNames.length; i++) {
+    let table = tableNames[i];
+    selectConditions.push(`${table}.*`);
+    joinConditions.push(
+      `LEFT JOIN ${table} ON clients.${table} = ${table}.${table}_id`
     );
+  }
+
+  let selectString = selectConditions.join(", ");
+  let joinString = joinConditions.join(" ");
+
+  let sql = `SELECT ${selectString} FROM clients ${joinString};`;
+
+  let { code, rows } = await performFormattedQuery(client, sql);
+  if (code !== 200 || rows.length === 0) {
+    res.status(400);
+    res.write(JSON.stringify({ message: "Failed to get clients." }));
     next();
     return;
   }
 
   let allClientDetails: ClientDetails[] = [];
-  let promises: Promise<ClientDetails>[] = [];
-  let clientDetails: ClientDetails[] = [];
-  let clientEntries = rows;
-  let totalEntries = clientEntries.length;
-  let index = 0;
-  const maxConsecutiveThreads = 8;
+  // Need to use the client schema to parse all of the returned rows.
+  for (let details of rows) {
+    // Create a deep copy of the schema tabs.
+    let clientDetails: ClientDetails = {
+      id: details.id,
+      tabs: JSON.parse(JSON.stringify(schema.tabs)),
+    };
 
-  // Get all client entries, 16 at a time.
-  while (index + maxConsecutiveThreads < totalEntries) {
-    for (let i = 0; i < maxConsecutiveThreads; i++) {
-      let clientDetailsPromise = getSingleClientDetails(
-        clientEntries[index + i],
-        tableNames
-      );
-      promises.push(clientDetailsPromise);
+    for (let i = 0; i < schema.tabs.length; i++) {
+      for (let j = 0; j < schema.tabs[i].fields.length; j++) {
+        clientDetails.tabs[i].fields[j].value =
+          details[schema.tabs[i].fields[j].name];
+      }
     }
 
-    let clientDetails = await Promise.all(promises);
-    promises = [];
-    allClientDetails = allClientDetails.concat(clientDetails);
+    let copy = { ...clientDetails };
 
-    index += maxConsecutiveThreads;
+    allClientDetails.push(copy);
   }
-
-  // Get any remaining entries.
-  for (let i = 0; i < totalEntries - index; i++) {
-    let clientDetailsPromise = getSingleClientDetails(
-      clientEntries[index + i],
-      tableNames
-    );
-    promises.push(clientDetailsPromise);
-  }
-
-  clientDetails = await Promise.all(promises);
-  allClientDetails = allClientDetails.concat(clientDetails);
-  clientDetails = [];
 
   res.status(200);
   res.write(JSON.stringify(allClientDetails));
@@ -253,104 +128,17 @@ export const getNewClientSchema = async (
 ) => {
   const client = req.body.awsClient;
 
-  // Get all column names other than the id field.
-  let tableNames = await getTableSchema(client, "clients");
-  try {
-    tableNames = tableNames.slice(1);
-  } catch (e: any) {
+  let schema = await getClientSchema(client);
+
+  if (schema === undefined) {
     res.status(400);
-    res.write(JSON.stringify({ message: e.message }));
+    res.write(JSON.stringify({ message: "Failed to get client details." }));
     next();
     return;
   }
 
-  const clientDetailsSchema: ClientDetailsTab[] = [];
-
-  // Get the schema for each table related to clients.
-  for (let tableName of tableNames) {
-    let rows;
-    try {
-      rows = await getTableSchema(client, tableName.column_name);
-    } catch (e: any) {
-      res.status(400);
-      res.write(JSON.stringify(JSON.stringify({ message: e.message })));
-      next();
-      return;
-    }
-
-    let fields: DatabaseColumn[] = [];
-
-    // Convert the database schema to the UI schema.
-    for (let field of rows) {
-      // Skip any id fields.
-      if (field.column_name.endsWith("id")) {
-        continue;
-      }
-
-      // Get type and default value based on data type.
-      let type: ColumnType;
-      let value: any;
-      let options: string[] | undefined;
-      switch (field.data_type) {
-        case "character varying":
-          type = "text";
-          value = "";
-          break;
-        case "boolean":
-          type = "checkbox";
-          value = false;
-          break;
-        case "text":
-          type = "textarea";
-          value = "";
-          break;
-        case "USER-DEFINED":
-          type = "select";
-          value = "---";
-
-          // Get the possible values for the user defined enum.
-          try {
-            options = await getEnumTypeValues(client, field.udt_name);
-          } catch (e: any) {
-            res.status(400);
-            res.write(JSON.stringify({ message: e.message }));
-            next();
-            return;
-          }
-
-          break;
-        default:
-          type = "text";
-          value = "";
-          break;
-      }
-
-      let fieldSchema: DatabaseColumn = {
-        name: field.column_name,
-        label: capitalizeName(field.column_name),
-        required: field.is_nullable === IsNullable.No,
-        type: type,
-        value: value,
-        options: options,
-      };
-
-      fields.push(fieldSchema);
-    }
-
-    clientDetailsSchema.push({
-      name: tableName.column_name,
-      label: capitalizeName(tableName.column_name),
-      fields: fields,
-    });
-  }
-
-  let clientDetails: ClientDetails = {
-    id: "",
-    tabs: clientDetailsSchema,
-  };
-
   res.status(200);
-  res.write(JSON.stringify(clientDetails));
+  res.write(JSON.stringify(schema));
   next();
 };
 
