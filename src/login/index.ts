@@ -221,7 +221,10 @@ export const sendResetPasswordEmail = async (
   var ses = new aws.SES({ apiVersion: "2010-12-01" });
   await ses.sendEmail(emailParams, (err, data) => {
     if (err) {
-      console.log(err);
+      res.status(400);
+      res.write(JSON.stringify({ message: "Failed to send an email." }));
+      next();
+      return;
     }
   });
 
