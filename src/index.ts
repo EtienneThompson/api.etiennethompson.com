@@ -3,7 +3,7 @@ import { exceptionLogging } from "./middleware/exceptionLogging";
 import { createDatabaseConnection } from "./middleware/createDatabaseConnection";
 import { closeDatabaseConnectionMiddleware } from "./middleware/closeDatabaseConnection";
 import { validateUser } from "./middleware/validateUser";
-import { loginHandler } from "./login";
+import * as login from "./login";
 import * as dashboard from "./admin/Dashboard";
 import * as users from "./admin/Users";
 import * as mockUsers from "./admin/Users/mocks";
@@ -65,8 +65,8 @@ app.use(validateUser);
 app.get("/", handler);
 
 // Login routes.
-app.post("/login", loginHandler);
-app.post("/login/reset");
+app.post("/login", login.loginHandler);
+app.post("/login/reset/request", login.sendResetPasswordEmail);
 
 // Admin User routes.
 app.get("/admin/dashboard/count", dashboard.getTableCounts);

@@ -192,5 +192,36 @@ export const sendResetPasswordEmail = async (
   aws.config.update({
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
     accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    region: "us-west-2",
   });
+
+  var emailParams = {
+    Destination: {
+      ToAddresses: [email],
+    },
+    Message: {
+      Body: {
+        Text: {
+          Charset: "UTF-8",
+          Data: link,
+        },
+      },
+      Subject: {
+        Charset: "UTF-8",
+        Data: "[login.etiennethompson.com] You requested to reset your password.",
+      },
+    },
+    Source: "noreply@etiennethompson.com",
+  };
+
+  var ses = new aws.SES({ apiVersion: "2010-12-01" });
+  await ses.sendEmail(emailParams, (err, data) => {
+    if (err) {
+      console.log(err);
+    }
+  });
+
+  res.status(200);
+  next();
+  return;
 };
