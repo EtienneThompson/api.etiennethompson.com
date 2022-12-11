@@ -43,6 +43,26 @@ export interface QueryProps {
 }
 
 /**
+ * Gets a user's id based on their clientid for future database interactions.
+ * @param client The database client used to query.
+ * @param clientid The client id that is passed to the API endpoint.
+ * @returns The userid for that client id if it exists.
+ */
+export const getUserId = async (
+  client: any,
+  clientid: string
+): Promise<string> => {
+  let query: QueryProps = {
+    name: "inventoryGetUserIdQuery",
+    text: "SELECT userid FROM users WHERE clientid=$1;",
+    values: [clientid],
+  };
+  let { code, rows } = await performQuery(client, query);
+  // The client id was verified in middleware, so this should always return a value.
+  return rows[0].userid as string;
+};
+
+/**
  * TODO: Perform the query, retrying on failed database connections.
  * @param client the database to perform the query on.
  * @param query the query to perform.

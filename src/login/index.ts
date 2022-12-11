@@ -3,8 +3,12 @@ import { v4 as uuidv4 } from "uuid";
 import aws from "aws-sdk";
 import { LoginRequest, ApplicationEntry, UserAdminStatus } from "./types";
 import { UserEntry } from "../types";
-import { QueryProps, performQuery } from "../utils/database";
-import { createHourExpiration, createMinuteExpiration } from "../utils/date";
+import { QueryProps, performQuery, getUserId } from "../utils/database";
+import {
+  createHourExpiration,
+  createMinuteExpiration,
+  getCurrentTimeField,
+} from "../utils/date";
 
 export const loginHandler = async (req: Request, res: Response, next: any) => {
   const client = req.body.client;
@@ -20,7 +24,7 @@ export const loginHandler = async (req: Request, res: Response, next: any) => {
     values: [reqBody.username, reqBody.hashedPassword],
   };
   let { code, rows } = await performQuery(client, query);
-  if (code === 200 && rows) {
+  if (code === 200 && rows.length > 0) {
     const entry = rows[0] as UserEntry;
     clientId = entry.clientid;
     userId = entry.userid;
@@ -220,6 +224,42 @@ export const sendResetPasswordEmail = async (
       console.log(err);
     }
   });
+
+  res.status(200);
+  next();
+  return;
+};
+
+export const changePassword = async (
+  req: Request,
+  res: Response,
+  next: any
+) => {
+  const client = req.body.client;
+  const resetCode = req.body.resetCode;
+  const newPassword = req.body.newPassword;
+
+  console.log(resetCode);
+  console.log(newPassword);
+
+  const currentTime = getCurrentTimeField();
+
+  let query: QueryProps = {
+    name: "resetUserPassword",
+    text: "UPDATE users SET password=$1, reset_code=NULL, reset_expiration=NULL WHERE reset_code=$2 AND reset_expiration>=$3",
+    values: [newPassword, resetCode, currentTime],
+  };
+  const { code, rows } = await performQuery(client, query);
+  if (code !== 200) {
+    res.status(400);
+    res.write(
+      JSON.stringify({
+        message: "Couldn't reset your password. The code might have expired.",
+      })
+    );
+    next();
+    return;
+  }
 
   res.status(200);
   next();

@@ -67,6 +67,7 @@ app.get("/", handler);
 // Login routes.
 app.post("/login", login.loginHandler);
 app.post("/login/reset/request", login.sendResetPasswordEmail);
+app.post("/login/reset", login.changePassword);
 
 // Admin User routes.
 app.get("/admin/dashboard/count", dashboard.getTableCounts);
