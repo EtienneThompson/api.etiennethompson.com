@@ -239,9 +239,6 @@ export const changePassword = async (
   const resetCode = req.body.resetCode;
   const newPassword = req.body.newPassword;
 
-  console.log(resetCode);
-  console.log(newPassword);
-
   const currentTime = getCurrentTimeField();
 
   let query: QueryProps = {
