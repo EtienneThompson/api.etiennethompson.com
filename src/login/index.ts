@@ -246,11 +246,11 @@ export const changePassword = async (
 
   let query: QueryProps = {
     name: "resetUserPassword",
-    text: "UPDATE users SET password=$1, reset_code=NULL, reset_expiration=NULL WHERE reset_code=$2 AND reset_expiration>=$3",
+    text: "UPDATE users SET password=$1, reset_code=NULL, reset_expiration=NULL WHERE reset_code=$2 AND reset_expiration>=$3 RETURNING user;",
     values: [newPassword, resetCode, currentTime],
   };
   const { code, rows } = await performQuery(client, query);
-  if (code !== 200) {
+  if (code !== 200 || rows.length === 0) {
     res.status(400);
     res.write(
       JSON.stringify({
