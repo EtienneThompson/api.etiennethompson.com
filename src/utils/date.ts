@@ -14,15 +14,36 @@ const monthWords = [
 ];
 
 /**
- * Creates a string which is 2 hours in the future from the current time.
- * @returns string ISO format date time.
+ * Get a datetime string which is hour and minutes in the future.
+ * @param hour The number of hours in the future.
+ * @param minutes The number of minutes in the future.
+ * @returns String ISO format future date time.
  */
-export const createExpiration = (): string => {
+const createExpiration = (hour: number, minutes: number): string => {
   let now = new Date();
-  now.setHours(now.getHours() + 8);
+  now.setHours(now.getHours() + hour);
+  now.setMinutes(now.getMinutes() + minutes);
   let expiration = now.toISOString();
   expiration = expiration.replace("T", " ").split(".")[0];
   return expiration;
+};
+
+/**
+ * Creates a string which is 8 hours in the future from the current time.
+ * @param hour The number of hours to go in the future.
+ * @returns string ISO format date time.
+ */
+export const createHourExpiration = (hour: number = 8): string => {
+  return createExpiration(hour, 0);
+};
+
+/**
+ * Create a string which is minute minutes in the future from the current time.
+ * @param minute The number of minutes to go in the future.
+ * @returns string ISO format date time.
+ */
+export const createMinuteExpiration = (minute: number = 15): string => {
+  return createExpiration(0, minute);
 };
 
 /**

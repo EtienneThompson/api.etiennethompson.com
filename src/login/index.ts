@@ -1,9 +1,14 @@
 import { Request, Response } from "express";
 import { v4 as uuidv4 } from "uuid";
+import aws from "aws-sdk";
 import { LoginRequest, ApplicationEntry, UserAdminStatus } from "./types";
 import { UserEntry } from "../types";
-import { QueryProps, performQuery } from "../utils/database";
-import { createExpiration } from "../utils/date";
+import { QueryProps, performQuery, getUserId } from "../utils/database";
+import {
+  createHourExpiration,
+  createMinuteExpiration,
+  getCurrentTimeField,
+} from "../utils/date";
 
 export const loginHandler = async (req: Request, res: Response, next: any) => {
   const client = req.body.client;
@@ -19,7 +24,7 @@ export const loginHandler = async (req: Request, res: Response, next: any) => {
     values: [reqBody.username, reqBody.hashedPassword],
   };
   let { code, rows } = await performQuery(client, query);
-  if (code === 200 && rows) {
+  if (code === 200 && rows.length > 0) {
     const entry = rows[0] as UserEntry;
     clientId = entry.clientid;
     userId = entry.userid;
@@ -98,7 +103,7 @@ export const loginHandler = async (req: Request, res: Response, next: any) => {
   if (diff < 0) {
     // Generate a new clientId for the user.
     retClientId = uuidv4();
-    const expiration = createExpiration();
+    const expiration = createHourExpiration();
     query = {
       text: "UPDATE users SET clientid=$1, session_expiration=$2 WHERE userid=$3;",
       values: [retClientId, expiration, userId],
@@ -114,7 +119,7 @@ export const loginHandler = async (req: Request, res: Response, next: any) => {
   } else {
     // Use the existing clientId.
     retClientId = clientId;
-    const expiration = createExpiration();
+    const expiration = createHourExpiration();
     query = {
       text: "UPDATE users SET session_expiration=$1 WHERE userid=$2;",
       values: [expiration, userId],
@@ -138,4 +143,125 @@ export const loginHandler = async (req: Request, res: Response, next: any) => {
     })
   );
   next();
+};
+
+export const sendResetPasswordEmail = async (
+  req: Request,
+  res: Response,
+  next: any
+) => {
+  const client = req.body.client;
+  var email = req.body.email;
+
+  // Lookup that the email entered is associated with an account.
+  let query: QueryProps = {
+    name: "LookupUserByEmail",
+    text: "SELECT userid, username FROM users WHERE email=$1;",
+    values: [email],
+  };
+  let { code, rows } = await performQuery(client, query);
+  if (code !== 200 || rows.length === 0) {
+    res.status(400);
+    res.write(
+      JSON.stringify({ message: "Couldn't find a user with that email" })
+    );
+    next();
+    return;
+  }
+
+  // Generate a random UUID for the code and generate the expiration for 15
+  // minutes in the future.
+  var resetCode = uuidv4();
+  var expiration = createMinuteExpiration(15);
+
+  query = {
+    name: "SetResetCode",
+    text: "UPDATE users SET reset_code=$1, reset_expiration=$2 WHERE email=$3;",
+    values: [resetCode, expiration, email],
+  };
+  ({ code, rows } = await performQuery(client, query));
+  if (code !== 200) {
+    res.status(400);
+    res.write(
+      JSON.stringify({
+        message: "Failed to set the reset code and expiration.",
+      })
+    );
+    next();
+    return;
+  }
+
+  // Send the email with the reset link.
+  var link = `${process.env.SITE_URL}/reset_password?code=${resetCode}`;
+  aws.config.update({
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    region: "us-west-2",
+  });
+
+  var emailParams = {
+    Destination: {
+      ToAddresses: [email],
+    },
+    Message: {
+      Body: {
+        Text: {
+          Charset: "UTF-8",
+          Data: link,
+        },
+      },
+      Subject: {
+        Charset: "UTF-8",
+        Data: "[login.etiennethompson.com] You requested to reset your password.",
+      },
+    },
+    Source: "noreply@etiennethompson.com",
+  };
+
+  var ses = new aws.SES({ apiVersion: "2010-12-01" });
+  await ses.sendEmail(emailParams, (err, data) => {
+    if (err) {
+      res.status(400);
+      res.write(JSON.stringify({ message: "Failed to send an email." }));
+      next();
+      return;
+    }
+  });
+
+  res.status(200);
+  next();
+  return;
+};
+
+export const changePassword = async (
+  req: Request,
+  res: Response,
+  next: any
+) => {
+  const client = req.body.client;
+  const resetCode = req.body.resetCode;
+  const newPassword = req.body.newPassword;
+
+  const currentTime = getCurrentTimeField();
+
+  let query: QueryProps = {
+    name: "resetUserPassword",
+    text: "UPDATE users SET password=$1, reset_code=NULL, reset_expiration=NULL WHERE reset_code=$2 AND reset_expiration>=$3 RETURNING user;",
+    values: [newPassword, resetCode, currentTime],
+  };
+  const { code, rows } = await performQuery(client, query);
+  if (code !== 200 || rows.length === 0) {
+    res.status(400);
+    res.write(
+      JSON.stringify({
+        message: "Couldn't reset your password. The code might have expired.",
+      })
+    );
+    next();
+    return;
+  }
+
+  res.status(200);
+  next();
+  return;
 };
