@@ -14,8 +14,6 @@ import {
   getClientSchema,
   getEnumTypeValues,
   getTableSchema,
-  computeFieldHash,
-  removeFieldHash,
 } from "./helpers";
 import {
   ClientDetails,
@@ -107,10 +105,7 @@ export const getClientDetails = async (
       for (let j = 0; j < schema.tabs[i].fields.length; j++) {
         clientDetails.tabs[i].fields[j].value =
           details[
-            computeFieldHash(
-              schema.tabs[i].name,
-              schema.tabs[i].fields[j].name
-            )
+            createFieldName(schema.tabs[i].name, schema.tabs[i].fields[j].name)
           ];
       }
     }
@@ -187,7 +182,7 @@ export const postNewClientDetails = async (
     let values: (string | boolean)[] = [];
     let index = 2;
     for (let fieldData of tabData.fields) {
-      insertNames += computeFieldHash(tabData.name, fieldData.name) + ", ";
+      insertNames += createFieldName(tabData.name, fieldData.name) + ", ";
       valuePlaceholders += `$${index}, `;
       index++;
       values.push(
@@ -300,11 +295,11 @@ export const updateClientDetails = async (
     let insertIndex = 2;
     for (let fieldData of tabData.fields) {
       updateString +=
-        computeFieldHash(tabData.name, fieldData.name) +
+        createFieldName(tabData.name, fieldData.name) +
         " = $" +
         updateIndex +
         ", ";
-      insertNames += computeFieldHash(tabData.name, fieldData.name) + ", ";
+      insertNames += createFieldName(tabData.name, fieldData.name) + ", ";
       valuePlaceholders += `$${insertIndex}, `;
       insertIndex++;
       updateIndex++;
@@ -771,6 +766,9 @@ export const updateField = async (req: Request, res: Response, next: any) => {
   const fieldValues: DatabaseColumn = req.body.fieldValues;
 
   const newFieldName = createFieldName(tabName, fieldValues.label);
+
+  console.log(fieldName);
+  console.log(newFieldName);
 
   let query: QueryProps;
   // Update name and enum name if there was a change

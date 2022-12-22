@@ -42,10 +42,7 @@ export const createFieldName = (
   tabName: string,
   fieldName: string
 ): string => {
-  let tab = tabName;
-  if (tabName.includes(" ")) {
-    tab = createColumnName(tabName);
-  }
+  let tab = createColumnName(tabName);
   let field = createColumnName(fieldName);
   let uniqueField = computeFieldHash(tab, field);
   return uniqueField;
@@ -198,10 +195,7 @@ export const getClientSchema = async (
  * @param fieldName The name of the field.
  * @returns A unique string computed from the tab and field name.
  */
-export const computeFieldHash = (
-  tabName: string,
-  fieldName: string
-): string => {
+const computeFieldHash = (tabName: string, fieldName: string): string => {
   const hash = get8DigitsCode(tabName + fieldName);
   return `${fieldName}_${hash}`;
 };
@@ -211,7 +205,7 @@ export const computeFieldHash = (
  * @param fieldNameWithHash The field name with the unique episode.
  * @returns The field name with the hash removed.
  */
-export const removeFieldHash = (fieldNameWithHash: string): string => {
+const removeFieldHash = (fieldNameWithHash: string): string => {
   let containsHash = fieldNameWithHash.match(/_[0-9]{8}/);
   if (containsHash && containsHash.length > 0) {
     return fieldNameWithHash.substring(0, fieldNameWithHash.length - 9);
