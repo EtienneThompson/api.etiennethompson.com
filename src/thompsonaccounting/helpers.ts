@@ -9,6 +9,7 @@ import {
   IsNullable,
 } from "./types";
 import { capitalize } from "../utils/string";
+import { get8DigitsCode } from "../utils/hash";
 
 export const capitalizeName = (name: string): string => {
   let pieces = name.split("_");
@@ -22,7 +23,7 @@ export const capitalizeName = (name: string): string => {
   return ret_string;
 };
 
-export const createColumnName = (name: string): string => {
+const createColumnName = (name: string): string => {
   let pieces = name.trim().split(" ");
   let ret_string: string = "";
   for (let piece of pieces) {
@@ -31,6 +32,23 @@ export const createColumnName = (name: string): string => {
 
   ret_string = ret_string.substring(0, ret_string.length - 1);
   return ret_string;
+};
+
+export const createTabName = (name: string): string => {
+  return createColumnName(name);
+};
+
+export const createFieldName = (
+  tabName: string,
+  fieldName: string
+): string => {
+  let tab = tabName;
+  if (tabName.includes(" ")) {
+    tab = createColumnName(tabName);
+  }
+  let field = createColumnName(fieldName);
+  let uniqueField = computeFieldHash(tab, field);
+  return uniqueField;
 };
 
 export const getTableSchema = async (
@@ -48,7 +66,16 @@ export const getTableSchema = async (
     throw new Error(`Could not get the schema for ${tableName}`);
   }
 
-  return rows as ColumnSchemaInfo[];
+  let rowSchema = (rows as ColumnSchemaInfo[]).map((row) => {
+    return {
+      column_name: removeFieldHash(row.column_name),
+      data_type: row.data_type,
+      udt_name: row.udt_name,
+      is_nullable: row.is_nullable,
+    } as ColumnSchemaInfo;
+  });
+
+  return rowSchema;
 };
 
 export const getEnumTypeValues = async (
@@ -163,4 +190,33 @@ export const getClientSchema = async (
   };
 
   return clientDetails;
+};
+
+/**
+ * Computes a unique name for a field based on the tab and field name.
+ * @param tabName The name of the tab the field belongs to.
+ * @param fieldName The name of the field.
+ * @returns A unique string computed from the tab and field name.
+ */
+export const computeFieldHash = (
+  tabName: string,
+  fieldName: string
+): string => {
+  const hash = get8DigitsCode(tabName + fieldName);
+  return `${fieldName}_${hash}`;
+};
+
+/**
+ * Removes the unique hash from a stored field name.
+ * @param fieldNameWithHash The field name with the unique episode.
+ * @returns The field name with the hash removed.
+ */
+export const removeFieldHash = (fieldNameWithHash: string): string => {
+  let containsHash = fieldNameWithHash.match(/_[0-9]{8}/);
+  if (containsHash && containsHash.length > 0) {
+    console.log(fieldNameWithHash);
+    return fieldNameWithHash.substring(0, fieldNameWithHash.length - 9);
+  }
+
+  return fieldNameWithHash;
 };

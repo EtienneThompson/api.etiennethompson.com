@@ -1,30 +1,29 @@
-import e, { Request, Response } from "express";
+import { Request, Response } from "express";
 import { Client } from "pg";
 import { v4 as uuidv4 } from "uuid";
-import { Map } from "../types";
 import {
   QueryProps,
   performQuery,
-  connectToAWSDatabase,
   performFormattedQuery,
 } from "../utils/database";
 import { capitalize, isNullOrWhiteSpace } from "../utils/string";
 import {
   capitalizeName,
-  createColumnName,
+  createTabName,
+  createFieldName,
   getClientSchema,
   getEnumTypeValues,
   getTableSchema,
+  computeFieldHash,
+  removeFieldHash,
 } from "./helpers";
 import {
   ClientDetails,
-  ClientDetailsTab,
   DatabaseColumn,
   ColumnType,
   IsNullable,
   InsertedEntry,
   ColumnSchemaInfo,
-  ColumnMap,
 } from "./types";
 
 const format = require("pg-format");
@@ -107,7 +106,12 @@ export const getClientDetails = async (
     for (let i = 0; i < schema.tabs.length; i++) {
       for (let j = 0; j < schema.tabs[i].fields.length; j++) {
         clientDetails.tabs[i].fields[j].value =
-          details[schema.tabs[i].fields[j].name];
+          details[
+            computeFieldHash(
+              schema.tabs[i].name,
+              schema.tabs[i].fields[j].name
+            )
+          ];
       }
     }
 
@@ -183,7 +187,7 @@ export const postNewClientDetails = async (
     let values: (string | boolean)[] = [];
     let index = 2;
     for (let fieldData of tabData.fields) {
-      insertNames += fieldData.name + ", ";
+      insertNames += computeFieldHash(tabData.name, fieldData.name) + ", ";
       valuePlaceholders += `$${index}, `;
       index++;
       values.push(
@@ -285,6 +289,7 @@ export const updateClientDetails = async (
     return;
   }
   let entries = rows[0];
+  console.log(entries);
 
   for (let tabData of clientDetails.tabs) {
     // Get the list of column names and values to insert.
@@ -295,8 +300,12 @@ export const updateClientDetails = async (
     let values: (string | boolean)[] = [];
     let insertIndex = 2;
     for (let fieldData of tabData.fields) {
-      updateString += fieldData.name + " = $" + updateIndex + ", ";
-      insertNames += fieldData.name + ", ";
+      updateString +=
+        computeFieldHash(tabData.name, fieldData.name) +
+        " = $" +
+        updateIndex +
+        ", ";
+      insertNames += computeFieldHash(tabData.name, fieldData.name) + ", ";
       valuePlaceholders += `$${insertIndex}, `;
       insertIndex++;
       updateIndex++;
@@ -395,7 +404,7 @@ export const getAllTabs = async (req: Request, res: Response, next: any) => {
 
 export const createTab = async (req: Request, res: Response, next: any) => {
   const client = req.body.awsClient;
-  const tabName = createColumnName(req.body.tabName);
+  const tabName = createTabName(req.body.tabName);
   const tabNameKey = `${tabName}_id`;
 
   // Create a new database table for the tabs.
@@ -439,8 +448,8 @@ export const updateTabName = async (
   next: any
 ) => {
   const client = req.body.awsClient;
-  const currentName = createColumnName(req.body.currentName);
-  const newName = createColumnName(req.body.newName);
+  const currentName = createTabName(req.body.currentName);
+  const newName = createTabName(req.body.newName);
 
   let sql = format("ALTER TABLE %I RENAME TO %s;", currentName, newName);
   let { code, rows } = await performFormattedQuery(client, sql);
@@ -506,7 +515,7 @@ export const updateTabName = async (
 
 export const deleteTab = async (req: Request, res: Response, next: any) => {
   const client = req.body.awsClient;
-  const tabName = createColumnName(req.body.tabName);
+  const tabName = createTabName(req.body.tabName);
 
   let query: QueryProps = {
     name: "removeClientColumn",
@@ -569,7 +578,7 @@ export const getFieldsForTab = async (
   next: any
 ) => {
   const client = req.body.awsClient;
-  const tabName = createColumnName(req.query.tabName as string);
+  const tabName = createTabName(req.query.tabName as string);
 
   let fieldNames = await getTableSchema(client, tabName);
   fieldNames = fieldNames.slice(1) as ColumnSchemaInfo[];
@@ -588,8 +597,8 @@ export const getFieldSchema = async (
   next: any
 ) => {
   const client = req.body.awsClient;
-  const tabName = createColumnName(req.query.tabName as string);
-  const fieldName = createColumnName(req.query.fieldName as string);
+  const tabName = createTabName(req.query.tabName as string);
+  let fieldName = createTabName(req.query.fieldName as string);
 
   let rows;
   try {
@@ -624,22 +633,8 @@ export const getFieldSchema = async (
       type = "select";
       value = "---";
 
-      // Get the possible values for the user defined enum.
-      let query = {
-        name: `get${field.udt_name}Values`,
-        text: `SELECT unnest(enum_range(null::${field.udt_name}));`,
-        values: [],
-      };
-      let { code, rows } = await performQuery(client, query);
-      if (code !== 200) {
-        res.status(404);
-        res.write({ message: "User defined enum not found in database" });
-        next();
-        return;
-      }
-
-      options = rows.map((row) => row.unnest);
-      if (options !== undefined) {
+      options = await getEnumTypeValues(client, field.udt_name);
+      if (options !== undefined && options[0] !== "---") {
         options.splice(0, 0, "---");
       }
 
@@ -692,8 +687,8 @@ export const createField = async (req: Request, res: Response, next: any) => {
     return;
   }
 
-  const tabId = createColumnName(tabName);
-  const fieldName = createColumnName(fieldData.name);
+  const tabId = createTabName(tabName);
+  const fieldName = createFieldName(tabId, fieldData.name);
 
   let enumName: string = "";
   if (fieldData.type === "select" && fieldData.options) {
@@ -767,11 +762,11 @@ export const createField = async (req: Request, res: Response, next: any) => {
 
 export const updateField = async (req: Request, res: Response, next: any) => {
   const client: Client = req.body.awsClient;
-  const tabName: string = createColumnName(req.body.tabName);
-  const fieldName: string = createColumnName(req.body.fieldName);
+  const tabName: string = createTabName(req.body.tabName);
+  const fieldName: string = createFieldName(tabName, req.body.fieldName);
   const fieldValues: DatabaseColumn = req.body.fieldValues;
 
-  const newFieldName = createColumnName(fieldValues.label);
+  const newFieldName = createFieldName(tabName, fieldValues.label);
 
   let query: QueryProps;
   // Update name and enum name if there was a change
@@ -789,21 +784,6 @@ export const updateField = async (req: Request, res: Response, next: any) => {
         JSON.stringify({
           message: `Failed to rename the column ${fieldName}.`,
         })
-      );
-      next();
-      return;
-    }
-
-    query = {
-      name: `update${fieldName}Type`,
-      text: `ALTER TYPE ${fieldName} RENAME TO ${newFieldName};`,
-      values: [],
-    };
-    ({ code, rows } = await performQuery(client, query));
-    if (code !== 200) {
-      res.status(400);
-      res.write(
-        JSON.stringify({ message: `Failed to rename the enum ${fieldName}` })
       );
       next();
       return;
@@ -840,13 +820,30 @@ export const updateField = async (req: Request, res: Response, next: any) => {
   // If it is a dropdown, update the values if any have changed.
   // ALTER TYPE enumName ADD VALUE 'newVal' AFTER 'oldVal';
   if (fieldValues.type === "select") {
+    if (fieldName !== newFieldName) {
+      let query: QueryProps = {
+        name: `update${fieldName}Type`,
+        text: `ALTER TYPE ${fieldName} RENAME TO ${newFieldName};`,
+        values: [],
+      };
+      let { code, rows } = await performQuery(client, query);
+      if (code !== 200) {
+        res.status(400);
+        res.write(
+          JSON.stringify({ message: `Failed to rename the enum ${fieldName}` })
+        );
+        next();
+        return;
+      }
+    }
+
     // Get the possible values for the user defined enum.
-    let query = {
+    query = {
       name: `get${newFieldName}Values`,
       text: `SELECT unnest(enum_range(null::${newFieldName}));`,
       values: [],
     };
-    let { code, rows } = await performQuery(client, query);
+    ({ code, rows } = await performQuery(client, query));
     if (code !== 200) {
       res.status(404);
       res.write(
@@ -896,8 +893,8 @@ export const updateField = async (req: Request, res: Response, next: any) => {
 export const deleteField = async (req: Request, res: Response, next: any) => {
   const client = req.body.awsClient;
 
-  const tabName = createColumnName(req.body.tabName);
-  const fieldName = createColumnName(req.body.fieldName);
+  const tabName = createTabName(req.body.tabName);
+  const fieldName = createFieldName(tabName, req.body.fieldName);
 
   let query: QueryProps = {
     name: `drop${fieldName}Column`,
