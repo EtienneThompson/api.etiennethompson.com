@@ -214,7 +214,6 @@ export const computeFieldHash = (
 export const removeFieldHash = (fieldNameWithHash: string): string => {
   let containsHash = fieldNameWithHash.match(/_[0-9]{8}/);
   if (containsHash && containsHash.length > 0) {
-    console.log(fieldNameWithHash);
     return fieldNameWithHash.substring(0, fieldNameWithHash.length - 9);
   }
 

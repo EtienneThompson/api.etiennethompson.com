@@ -289,7 +289,6 @@ export const updateClientDetails = async (
     return;
   }
   let entries = rows[0];
-  console.log(entries);
 
   for (let tabData of clientDetails.tabs) {
     // Get the list of column names and values to insert.
@@ -323,7 +322,12 @@ export const updateClientDetails = async (
       valuePlaceholders.length - 2
     );
 
-    if (entries[tabData.name]) {
+    if (
+      entries[tabData.name] &&
+      !isNullOrWhiteSpace(updateString) &&
+      !isNullOrWhiteSpace(insertNames) &&
+      !isNullOrWhiteSpace(valuePlaceholders)
+    ) {
       // Update the existing values.
       let query: QueryProps = {
         name: `update${tabData.name}Entry`,
