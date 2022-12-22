@@ -767,9 +767,6 @@ export const updateField = async (req: Request, res: Response, next: any) => {
 
   const newFieldName = createFieldName(tabName, fieldValues.label);
 
-  console.log(fieldName);
-  console.log(newFieldName);
-
   let query: QueryProps;
   // Update name and enum name if there was a change
   if (fieldName !== newFieldName) {
