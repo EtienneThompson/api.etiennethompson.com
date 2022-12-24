@@ -7,7 +7,7 @@ import {
   getClientSchema,
 } from "../thompsonaccounting/helpers";
 
-require("dotenv").config({ path: `./.env.production` });
+require("dotenv").config({ path: `./.env.local` });
 
 const rename_columns = async () => {
   if (
@@ -42,7 +42,6 @@ const rename_columns = async () => {
       let { code, rows } = await performFormattedQuery(client, sql);
 
       if (code !== 200) {
-        console.log(code);
         console.log("ERROR!!!");
       }
 
@@ -53,7 +52,6 @@ const rename_columns = async () => {
         let { code, rows } = await performFormattedQuery(client, sql);
 
         if (code !== 200) {
-          console.log(code);
           console.log("ERROR!!!!");
         }
       }
