@@ -7,6 +7,7 @@ import {
   ColumnSchemaInfo,
   DatabaseColumn,
   IsNullable,
+  FieldMetadata,
 } from "./types";
 import { capitalize } from "../utils/string";
 import { get8DigitsCode } from "../utils/hash";
@@ -46,6 +47,40 @@ export const createFieldName = (
   let field = createColumnName(fieldName);
   let uniqueField = computeFieldHash(tab, field);
   return uniqueField;
+};
+
+export const getFieldMetadata = async (
+  client: Client,
+  fieldName: string
+): Promise<FieldMetadata> => {
+  const query: QueryProps = {
+    name: "GetFieldMetadata",
+    text: "SELECT tab_name, field_name, position FROM field_metadata WHERE field_name=$1",
+    values: [fieldName],
+  };
+  const { code, rows } = await performQuery(client, query);
+  if (code !== 200) {
+    throw new Error(`Could not get the metadata for ${fieldName}`);
+  }
+
+  return rows[0] as FieldMetadata;
+};
+
+export const getFieldMetadataForTab = async (
+  client: Client,
+  tabName: string
+): Promise<FieldMetadata[]> => {
+  const query: QueryProps = {
+    name: "GetFieldMetadataForTab",
+    text: "SELECT tab_name, field_name, position FROM field_metadata WHERE tab_name=$1",
+    values: [tabName],
+  };
+  const { code, rows } = await performQuery(client, query);
+  if (code !== 200) {
+    throw new Error(`Could not get the metadata for ${tabName}`);
+  }
+
+  return rows as FieldMetadata[];
 };
 
 export const getTableSchema = async (
@@ -111,9 +146,19 @@ export const getClientSchema = async (
 
   // Get the schema for each table related to clients.
   for (let tableName of tableNames) {
-    let rows;
+    let tabSchema;
     try {
-      rows = await getTableSchema(client, tableName.column_name);
+      tabSchema = await getTableSchema(client, tableName.column_name);
+    } catch (e: any) {
+      return undefined;
+    }
+
+    let fieldMetadata;
+    try {
+      fieldMetadata = await getFieldMetadataForTab(
+        client,
+        tableName.column_name
+      );
     } catch (e: any) {
       return undefined;
     }
@@ -121,7 +166,7 @@ export const getClientSchema = async (
     let fields: DatabaseColumn[] = [];
 
     // Convert the database schema to the UI schema.
-    for (let field of rows) {
+    for (let field of tabSchema) {
       // Skip any id fields.
       if (field.column_name.endsWith("id")) {
         continue;
@@ -162,17 +207,26 @@ export const getClientSchema = async (
           break;
       }
 
+      // Find the metadata for the given field.
+      let metadata = fieldMetadata.filter((m) =>
+        m.field_name.includes(field.column_name)
+      )[0];
+
       let fieldSchema: DatabaseColumn = {
         name: field.column_name,
         label: capitalizeName(field.column_name),
         required: field.is_nullable === IsNullable.No,
         type: type,
         value: value,
+        position: metadata.position,
         options: options,
       };
 
       fields.push(fieldSchema);
     }
+
+    // Sort fields based on their metadata position.
+    fields = fields.sort((f) => f.position);
 
     clientDetailsSchema.push({
       name: tableName.column_name,

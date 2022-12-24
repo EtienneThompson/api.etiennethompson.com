@@ -14,6 +14,7 @@ import {
   getClientSchema,
   getEnumTypeValues,
   getTableSchema,
+  getFieldMetadata,
 } from "./helpers";
 import {
   ClientDetails,
@@ -609,6 +610,19 @@ export const getFieldSchema = async (
     return;
   }
 
+  let metadata;
+  try {
+    metadata = await getFieldMetadata(
+      client,
+      createFieldName(tabName, fieldName)
+    );
+  } catch (e: any) {
+    res.status(400);
+    res.write(JSON.stringify({ message: e.message }));
+    next();
+    return;
+  }
+
   let field = rows.filter((data) => data.column_name === fieldName)[0];
 
   // Get type and default value based on data type.
@@ -650,6 +664,7 @@ export const getFieldSchema = async (
     required: field.is_nullable === IsNullable.No,
     type: type,
     value: value,
+    position: metadata.position,
     options: options,
   };
 
