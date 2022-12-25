@@ -870,6 +870,21 @@ export const updateField = async (req: Request, res: Response, next: any) => {
       next();
       return;
     }
+
+    query = {
+      name: "UpdateFieldMetadataName",
+      text: "UPDATE field_metadata SET field_name = $1 WHERE field_name=$2 RETURNING *;",
+      values: [newFieldName, fieldName],
+    };
+    ({ code, rows } = await performQuery(client, query));
+    if (code !== 200 || rows.length === 0) {
+      res.status(400);
+      res.write(
+        JSON.stringify({ message: "Couldn't update field metadata name." })
+      );
+      next();
+      return;
+    }
   }
 
   // update the required status of the column.
