@@ -13,7 +13,8 @@ import { capitalize } from "../utils/string";
 import { get8DigitsCode } from "../utils/hash";
 
 export const capitalizeName = (name: string): string => {
-  let pieces = name.split("_");
+  let readableName = removeFieldHash(name);
+  let pieces = readableName.split("_");
   let ret_string: string = "";
   for (let piece of pieces) {
     piece = capitalize(piece);
@@ -226,7 +227,7 @@ export const getClientSchema = async (
     }
 
     // Sort fields based on their metadata position.
-    fields = fields.sort((f) => f.position);
+    fields = fields.sort((a, b) => a.position - b.position);
 
     clientDetailsSchema.push({
       name: tableName.column_name,
@@ -259,7 +260,7 @@ const computeFieldHash = (tabName: string, fieldName: string): string => {
  * @param fieldNameWithHash The field name with the unique episode.
  * @returns The field name with the hash removed.
  */
-const removeFieldHash = (fieldNameWithHash: string): string => {
+export const removeFieldHash = (fieldNameWithHash: string): string => {
   let containsHash = fieldNameWithHash.match(/_[0-9]{8}/);
   if (containsHash && containsHash.length > 0) {
     return fieldNameWithHash.substring(0, fieldNameWithHash.length - 9);

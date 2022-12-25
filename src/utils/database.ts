@@ -39,7 +39,7 @@ export const connectToAWSDatabase = async (
 export interface QueryProps {
   name?: string;
   text: string;
-  values: (string | boolean)[];
+  values: (string | boolean | number)[];
 }
 
 /**
