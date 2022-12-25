@@ -16,7 +16,6 @@ import {
   getTableSchema,
   getFieldMetadata,
   getFieldMetadataForTab,
-  removeFieldHash,
 } from "./helpers";
 import {
   ClientDetails,

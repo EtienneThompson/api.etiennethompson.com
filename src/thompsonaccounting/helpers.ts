@@ -260,7 +260,7 @@ const computeFieldHash = (tabName: string, fieldName: string): string => {
  * @param fieldNameWithHash The field name with the unique episode.
  * @returns The field name with the hash removed.
  */
-export const removeFieldHash = (fieldNameWithHash: string): string => {
+const removeFieldHash = (fieldNameWithHash: string): string => {
   let containsHash = fieldNameWithHash.match(/_[0-9]{8}/);
   if (containsHash && containsHash.length > 0) {
     return fieldNameWithHash.substring(0, fieldNameWithHash.length - 9);
