@@ -243,6 +243,8 @@ app.delete("/thompsonaccounting/tabs", accounting.deleteTab);
 app.get("/thompsonaccounting/field", accounting.getFieldsForTab);
 app.get("/thompsonaccounting/field/schema", accounting.getFieldSchema);
 app.get("/thompsonaccounting/allfields", accounting.getAllFields);
+app.get("/thompsonaccounting/fields/metadata", accounting.getFieldsMetadata);
+app.post("/thompsonaccounting/fields/metadata", accounting.reorderFields);
 app.post("/thompsonaccounting/fields", accounting.createField);
 app.put("/thompsonaccounting/field", accounting.updateField);
 app.delete("/thompsonaccounting/field", accounting.deleteField);

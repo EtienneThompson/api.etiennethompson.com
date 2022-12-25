@@ -14,6 +14,8 @@ import {
   getClientSchema,
   getEnumTypeValues,
   getTableSchema,
+  getFieldMetadata,
+  getFieldMetadataForTab,
 } from "./helpers";
 import {
   ClientDetails,
@@ -22,6 +24,7 @@ import {
   IsNullable,
   InsertedEntry,
   ColumnSchemaInfo,
+  FieldMetadata,
 } from "./types";
 
 const format = require("pg-format");
@@ -609,6 +612,19 @@ export const getFieldSchema = async (
     return;
   }
 
+  let metadata;
+  try {
+    metadata = await getFieldMetadata(
+      client,
+      createFieldName(tabName, fieldName)
+    );
+  } catch (e: any) {
+    res.status(400);
+    res.write(JSON.stringify({ message: e.message }));
+    next();
+    return;
+  }
+
   let field = rows.filter((data) => data.column_name === fieldName)[0];
 
   // Get type and default value based on data type.
@@ -650,11 +666,78 @@ export const getFieldSchema = async (
     required: field.is_nullable === IsNullable.No,
     type: type,
     value: value,
+    position: metadata.position,
     options: options,
   };
 
   res.status(200);
   res.write(JSON.stringify({ fieldSchema: fieldSchema }));
+  next();
+};
+
+export const getFieldsMetadata = async (
+  req: Request,
+  res: Response,
+  next: any
+) => {
+  const client = req.body.awsClient;
+  const tabName = createTabName(req.query.tabName as string);
+
+  let metadata: FieldMetadata[] = [];
+  try {
+    metadata = await getFieldMetadataForTab(client, tabName);
+  } catch (e: any) {
+    res.status(400);
+    res.write(JSON.stringify({ message: e.message }));
+    next();
+    return;
+  }
+
+  metadata = metadata.map((data) => {
+    return {
+      tab_name: data.tab_name,
+      field_name: capitalizeName(data.field_name),
+      position: data.position,
+    };
+  });
+
+  res.status(200);
+  res.write(JSON.stringify(metadata));
+  next();
+};
+
+export const reorderFields = async (
+  req: Request,
+  res: Response,
+  next: any
+) => {
+  const client = req.body.awsClient;
+  const fieldMetadata = req.body.fieldMetadata as FieldMetadata[];
+
+  for (let metadata of fieldMetadata) {
+    let fieldName = createFieldName(
+      metadata.tab_name,
+      createTabName(metadata.field_name)
+    );
+    let query: QueryProps = {
+      name: "UpdateFieldMetadata",
+      text: "UPDATE field_metadata SET position = $1 WHERE tab_name=$2 AND field_name=$3 RETURNING *;",
+      values: [metadata.position, metadata.tab_name, fieldName],
+    };
+    const { code, rows } = await performQuery(client, query);
+    if (code !== 200 || rows.length === 0) {
+      res.status(400);
+      res.write(
+        JSON.stringify({
+          message: `Couldn't update metadata for field ${metadata.field_name}`,
+        })
+      );
+      next();
+      return;
+    }
+  }
+
+  res.status(200);
   next();
 };
 

@@ -29,6 +29,7 @@ export interface DatabaseColumn {
   type: ColumnType;
   value: string | boolean;
   renderCondition?: RenderCondition;
+  position: number;
   options?: string[];
 }
 
@@ -51,4 +52,10 @@ export enum IsNullable {
 export interface InsertedEntry {
   tableName: string;
   id: string;
+}
+
+export interface FieldMetadata {
+  tab_name: string;
+  field_name: string;
+  position: number;
 }
