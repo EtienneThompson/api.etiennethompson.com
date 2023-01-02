@@ -484,7 +484,7 @@ export const updateTabName = async (
   // ALTER TABLE ${newName} RENAME COLUMN ${currentName)_id TO ${newName}_id;
   sqlString = `ALTER TABLE %I RENAME COLUMN ${currentName}_id TO ${newName}_id;`;
   sql = format(sqlString, newName);
-  ({ code, rows } = await performQuery(client, sql));
+  ({ code, rows } = await performFormattedQuery(client, sql));
   if (code !== 200) {
     res.status(400);
     res.write(
@@ -499,7 +499,7 @@ export const updateTabName = async (
   // ALTER TABLE clients RENAME COLUMN ${currentName} TO ${newName};
   sqlString = `ALTER TABLE clients RENAME COLUMN %s TO %s;`;
   sql = format(sqlString, currentName, newName);
-  ({ code, rows } = await performQuery(client, sql));
+  ({ code, rows } = await performFormattedQuery(client, sql));
   if (code !== 200) {
     res.status(400);
     res.write(
@@ -509,6 +509,55 @@ export const updateTabName = async (
     );
     next();
     return;
+  }
+
+  sqlString =
+    "UPDATE field_metadata SET tab_name='%s' WHERE tab_name='%s' RETURNING *;";
+  sql = format(sqlString, newName, currentName);
+  ({ code, rows } = await performFormattedQuery(client, sql));
+  if (code !== 200 || rows.length === 0) {
+    res.status(400);
+    res.write(
+      JSON.stringify({
+        message: `Failed to update field metadata for fields in ${currentName}`,
+      })
+    );
+    next();
+    return;
+  }
+
+  // Need to now rename all fields in that table, as their hash will be different now.
+  let schema = await getTableSchema(client, newName);
+
+  for (let column of schema) {
+    if (column.column_name.endsWith("id")) {
+      continue;
+    }
+
+    let oldFieldName = createFieldName(currentName, column.column_name);
+    let newFieldName = createFieldName(newName, column.column_name);
+    sqlString = "ALTER TABLE %I RENAME COLUMN %s TO %s;";
+    sql = format(sqlString, newName, oldFieldName, newFieldName);
+    ({ code, rows } = await performFormattedQuery(client, sql));
+    if (code !== 200) {
+      res.status(400);
+      res.write(JSON.stringify({ message: "Failed to rename column" }));
+      next();
+      return;
+    }
+
+    sqlString =
+      "UPDATE field_metadata SET field_name='%s' WHERE field_name='%s' RETURNING *;";
+    sql = format(sqlString, newFieldName, oldFieldName);
+    ({ code, rows } = await performFormattedQuery(client, sql));
+    if (code !== 200) {
+      res.status(400);
+      res.write(
+        JSON.stringify({ message: "Failed to rename metadata column" })
+      );
+      next();
+      return;
+    }
   }
 
   res.status(200);
@@ -866,6 +915,21 @@ export const updateField = async (req: Request, res: Response, next: any) => {
         JSON.stringify({
           message: `Failed to rename the column ${fieldName}.`,
         })
+      );
+      next();
+      return;
+    }
+
+    query = {
+      name: "UpdateFieldMetadataName",
+      text: "UPDATE field_metadata SET field_name = $1 WHERE field_name=$2 RETURNING *;",
+      values: [newFieldName, fieldName],
+    };
+    ({ code, rows } = await performQuery(client, query));
+    if (code !== 200 || rows.length === 0) {
+      res.status(400);
+      res.write(
+        JSON.stringify({ message: "Couldn't update field metadata name." })
       );
       next();
       return;
