@@ -16,6 +16,7 @@ import {
   getTableSchema,
   getFieldMetadata,
   getFieldMetadataForTab,
+  getNumberOfFields,
 } from "./helpers";
 import {
   ClientDetails,
@@ -598,6 +599,24 @@ export const deleteTab = async (req: Request, res: Response, next: any) => {
     return;
   }
 
+  // Delete all metadata associated with the tab.
+  query = {
+    name: "deleteTabMetadata",
+    text: "DELETE FROM field_metadata WHERE tab_name=$1;",
+    values: [tabName],
+  };
+  ({ code, rows } = await performQuery(client, query));
+  if (code !== 200) {
+    res.status(400);
+    res.write(
+      JSON.stringify({
+        message: `Failed to delete metadata for tab ${tabName}`,
+      })
+    );
+    next();
+    return;
+  }
+
   res.status(200);
   next();
 };
@@ -887,6 +906,28 @@ export const createField = async (req: Request, res: Response, next: any) => {
     return;
   }
 
+  // Add a column to the field metadata.
+  let metadataId = uuidv4();
+  // Subtract 2 from the number of fields to account for the ID field and the
+  // newly created field.
+  let position = (await getNumberOfFields(client, tabId)) - 2;
+  query = {
+    name: "CreateFieldMetadata",
+    text: "INSERT INTO field_metadata (metadata_id, tab_name, field_name, position) VALUES ($1, $2, $3, $4);",
+    values: [metadataId, tabId, fieldName, position],
+  };
+  ({ code, rows } = await performQuery(client, query));
+  if (code !== 200) {
+    res.status(400);
+    res.write(
+      JSON.stringify({
+        message: `Failed to create metadata for field ${fieldData.label}`,
+      })
+    );
+    next();
+    return;
+  }
+
   res.status(200);
   next();
 };
@@ -1047,11 +1088,29 @@ export const deleteField = async (req: Request, res: Response, next: any) => {
     text: `ALTER TABLE ${tabName} DROP COLUMN ${fieldName};`,
     values: [],
   };
-  const { code, rows } = await performQuery(client, query);
+  let { code, rows } = await performQuery(client, query);
   if (code !== 200) {
     res.status(400);
     res.write(
       JSON.stringify({ message: `Failed to delete the field ${fieldName}` })
+    );
+    next();
+    return;
+  }
+
+  // Delete the metadata for that field.
+  query = {
+    name: "deleteFieldMetadata",
+    text: "DELETE FROM field_metadata WHERE tab_name=$1 AND field_name=$2;",
+    values: [tabName, fieldName],
+  };
+  ({ code, rows } = await performQuery(client, query));
+  if (code !== 200) {
+    res.status(400);
+    res.write(
+      JSON.stringify({
+        message: `Failed to delete metadata for field ${fieldName}`,
+      })
     );
     next();
     return;
