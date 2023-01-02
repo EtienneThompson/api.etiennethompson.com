@@ -111,6 +111,14 @@ export const getTableSchema = async (
   return rowSchema;
 };
 
+export const getNumberOfFields = async (
+  client: Client,
+  tableName: string
+): Promise<number> => {
+  const tableSchema = await getTableSchema(client, tableName);
+  return tableSchema.length;
+};
+
 export const getEnumTypeValues = async (
   client: Client,
   enumName: string
