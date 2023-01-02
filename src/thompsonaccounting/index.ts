@@ -106,9 +106,6 @@ export const getClientDetails = async (
 
     for (let i = 0; i < schema.tabs.length; i++) {
       for (let j = 0; j < schema.tabs[i].fields.length; j++) {
-        console.log(
-          createFieldName(schema.tabs[i].name, schema.tabs[i].fields[j].name)
-        );
         clientDetails.tabs[i].fields[j].value =
           details[
             createFieldName(schema.tabs[i].name, schema.tabs[i].fields[j].name)
@@ -541,11 +538,23 @@ export const updateTabName = async (
     let newFieldName = createFieldName(newName, column.column_name);
     sqlString = "ALTER TABLE %I RENAME COLUMN %s TO %s;";
     sql = format(sqlString, newName, oldFieldName, newFieldName);
-    console.log(sql);
     ({ code, rows } = await performFormattedQuery(client, sql));
     if (code !== 200) {
       res.status(400);
       res.write(JSON.stringify({ message: "Failed to rename column" }));
+      next();
+      return;
+    }
+
+    sqlString =
+      "UPDATE field_metadata SET field_name='%s' WHERE field_name='%s' RETURNING *;";
+    sql = format(sqlString, newFieldName, oldFieldName);
+    ({ code, rows } = await performFormattedQuery(client, sql));
+    if (code !== 200) {
+      res.status(400);
+      res.write(
+        JSON.stringify({ message: "Failed to rename metadata column" })
+      );
       next();
       return;
     }
