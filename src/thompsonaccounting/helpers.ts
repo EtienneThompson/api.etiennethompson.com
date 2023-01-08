@@ -157,9 +157,9 @@ export const getClientSchema = async (
   client: Client
 ): Promise<ClientDetails | undefined> => {
   // Get all column names other than the id field.
-  let tableNames = await getTableSchema(client, "clients");
+  let tableNames: ColumnSchemaInfo[];
   try {
-    tableNames = tableNames.slice(1);
+    tableNames = await getTableSchema(client, "clients");
   } catch (e: any) {
     return undefined;
   }
