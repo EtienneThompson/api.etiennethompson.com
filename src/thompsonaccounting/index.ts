@@ -397,7 +397,6 @@ export const getAllTabs = async (req: Request, res: Response, next: any) => {
 
   // Get all column names other than the id field.
   let tableNames = await getTableSchema(client, "clients");
-  tableNames = tableNames.slice(1);
   let tabNames = tableNames.map((name) => capitalizeName(name.column_name));
 
   res.status(200);
@@ -625,13 +624,10 @@ export const getAllFields = async (req: Request, res: Response, next: any) => {
   const client = req.body.awsClient;
 
   let tableNames = await getTableSchema(client, "clients");
-  // Get all column names other than the id field.
-  tableNames = tableNames.slice(1) as ColumnSchemaInfo[];
   let allFieldNames: string[] = [];
 
   for (let tableName of tableNames) {
     let fieldNames = await getTableSchema(client, tableName.column_name);
-    fieldNames = fieldNames.slice(1) as ColumnSchemaInfo[];
     allFieldNames = allFieldNames.concat(
       fieldNames.map((name) => capitalizeName(name.column_name))
     );
@@ -651,7 +647,6 @@ export const getFieldsForTab = async (
   const tabName = createTabName(req.query.tabName as string);
 
   let fieldNames = await getTableSchema(client, tabName);
-  fieldNames = fieldNames.slice(1) as ColumnSchemaInfo[];
   const fieldStringNames = fieldNames.map((name) =>
     capitalizeName(name.column_name)
   );

@@ -108,6 +108,19 @@ export const getTableSchema = async (
     } as ColumnSchemaInfo;
   });
 
+  // Find the index of the ID field, which might not be the first element.
+  let idIndex = -1;
+  for (let [index, name] of rowSchema.entries()) {
+    if (name.column_name.includes("id") && !/[0-9]+$/.test(name.column_name)) {
+      idIndex = index;
+      break;
+    }
+  }
+
+  if (idIndex > -1) {
+    rowSchema.splice(idIndex, 1);
+  }
+
   return rowSchema;
 };
 
