@@ -236,6 +236,7 @@ app.get("/thompsonaccounting/clients", accounting.getClientDetails);
 app.get("/thompsonaccounting/clients/new", accounting.getNewClientSchema);
 app.post("/thompsonaccounting/clients/new", accounting.postNewClientDetails);
 app.put("/thompsonaccounting/clients", accounting.updateClientDetails);
+app.delete("/thompsonaccounting/clients", accounting.deleteClient);
 app.get("/thompsonaccounting/tabs", accounting.getAllTabs);
 app.post("/thompsonaccounting/tabs", accounting.createTab);
 app.put("/thompsonaccounting/tabs", accounting.updateTabName);

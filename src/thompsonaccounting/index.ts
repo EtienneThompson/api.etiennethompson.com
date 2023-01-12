@@ -392,6 +392,63 @@ export const updateClientDetails = async (
   next();
 };
 
+export const deleteClient = async (req: Request, res: Response, next: any) => {
+  const client = req.body.awsClient;
+  const clientId = req.body.clientId;
+
+  let query: QueryProps = {
+    name: "GetClientTableIds",
+    text: "SELECT * FROM clients WHERE id=$1",
+    values: [clientId],
+  };
+  let { code, rows } = await performQuery(client, query);
+  if (code !== 200 || rows.length === 0) {
+    res.status(400);
+    res.write(
+      JSON.stringify({ message: "Failed to get the client's details." })
+    );
+    next();
+    return;
+  }
+
+  query = {
+    name: "DeleteFromClients",
+    text: "DELETE FROM clients WHERE id=$1 RETURNING *;",
+    values: [clientId],
+  };
+  ({ code, rows } = await performQuery(client, query));
+  if (code !== 200 || rows.length === 0) {
+    res.status(400);
+    res.write(
+      JSON.stringify({ message: "Failed to delete the client details." })
+    );
+    next();
+    return;
+  }
+
+  console.log(rows[0]);
+  for (const [tableName, id] of Object.entries(rows[0])) {
+    if (tableName === "id") {
+      continue;
+    }
+
+    let sqlString = `DELETE FROM %I WHERE ${tableName}_id='%s' RETURNING *;`;
+    let sql = format(sqlString, tableName, id);
+    let { code, rows } = await performFormattedQuery(client, sql);
+    if (code !== 200 || rows.length === 0) {
+      res.status(400);
+      res.write(
+        JSON.stringify({ message: "Failed to delete the client details." })
+      );
+      next();
+      return;
+    }
+  }
+
+  res.status(200);
+  next();
+};
+
 export const getAllTabs = async (req: Request, res: Response, next: any) => {
   const client = req.body.awsClient;
 
