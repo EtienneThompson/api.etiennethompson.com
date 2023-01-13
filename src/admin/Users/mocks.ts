@@ -82,6 +82,7 @@ export const mockCreateUser = async (
   let newUser: ReturnUser = {
     userid: newUserId,
     username: newElement[0].value.toString(),
+    email: newElement[2].value.toString(),
     clientid: newClientId,
   };
   res.status(200).write(JSON.stringify({ newElement: newUser }));
@@ -95,9 +96,10 @@ export const mockUpdateUser = async (
   const updateElement = req.body.updateElement as DefaultValues[];
 
   let updateUser: ReturnUser = {
-    userid: updateElement[2].value.toString(),
+    userid: updateElement[3].value.toString(),
     username: updateElement[0].value.toString(),
-    clientid: updateElement[3].value.toString(),
+    email: updateElement[2].value.toString(),
+    clientid: updateElement[4].value.toString(),
   };
   res.status(200).write(JSON.stringify({ updatedElement: updateUser }));
 };

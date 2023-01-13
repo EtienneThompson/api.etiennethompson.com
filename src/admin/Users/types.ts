@@ -9,5 +9,6 @@ export interface User {
 export interface ReturnUser {
   userid: string;
   username: string;
+  email: string;
   clientid: string;
 }

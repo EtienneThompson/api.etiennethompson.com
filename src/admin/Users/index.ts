@@ -25,7 +25,7 @@ export const getUsers = async (req: Request, res: Response, next: any) => {
   const client = req.body.client;
   let query: QueryProps = {
     name: "userGetQuery",
-    text: "SELECT userid, username, clientid FROM users;",
+    text: "SELECT userid, username, email, clientid FROM users;",
     values: [],
   };
   let { code, rows } = await performQuery(client, query);
@@ -37,18 +37,21 @@ export const getUsers = async (req: Request, res: Response, next: any) => {
   let allHeaders = [
     { text: "Username", field: "username", type: "text" },
     { text: "Password", field: "password", type: "password" },
+    { text: "Email", field: "email", type: "text" },
     { text: "User ID", field: "userid", type: "text" },
     { text: "Client ID", field: "clientid", type: "text" },
   ];
   // Fields to display in the table.
   responseData.headers = [
     { text: "Username", field: "username" },
+    { text: "Email", field: "email" },
     { text: "User ID", field: "userid" },
     { text: "Client ID", field: "clientid" },
   ];
   // Fields to display when editing an element.
   responseData.editableFields = [
     { text: "Username", field: "username", edit: true },
+    { text: "Email", field: "email", edit: true },
     { text: "User ID", field: "userid", edit: false },
     { text: "Client ID", field: "clientid", edit: false },
   ];
@@ -56,6 +59,7 @@ export const getUsers = async (req: Request, res: Response, next: any) => {
   responseData.newFields = [
     { text: "Username", field: "username" },
     { text: "Password", field: "password" },
+    { text: "Email", field: "email" },
   ];
 
   // Set default values with all fields not able to be edited.
@@ -92,13 +96,14 @@ export const createUser = async (req: Request, res: Response, next: any) => {
   // Construct the insert query.
   let query: QueryProps = {
     name: "userCreateQuery",
-    text: "INSERT INTO users (userid, username, password, clientid, session_expiration) VALUES ($1, $2, $3, $4, $5);",
+    text: "INSERT INTO users (userid, username, password, clientid, session_expiration, email) VALUES ($1, $2, $3, $4, $5, $6);",
     values: [
       newUserId,
       newElement[0].value.toString(),
       newElement[1].value.toString(),
       newClientId,
       expiration,
+      newElement[2].value.toString(),
     ],
   };
 
@@ -109,6 +114,7 @@ export const createUser = async (req: Request, res: Response, next: any) => {
     let newUser: ReturnUser = {
       userid: newUserId,
       username: newElement[0].value.toString(),
+      email: newElement[2].value.toString(),
       clientid: newClientId,
     };
     res.status(200).write(JSON.stringify({ newElement: newUser }));
@@ -131,19 +137,21 @@ export const updateUser = async (req: Request, res: Response, next: any) => {
 
   let query: QueryProps = {
     name: "userUpdateQuery",
-    text: "UPDATE users SET username=$1 WHERE userid=$2;",
+    text: "UPDATE users SET username=$1, email=$2 WHERE userid=$3;",
     values: [
       updateElement[0].value.toString(),
       updateElement[2].value.toString(),
+      updateElement[3].value.toString(),
     ],
   };
   const { code, rows } = await performQuery(client, query);
 
   if (code === 200) {
     let updateUser: ReturnUser = {
-      userid: updateElement[2].value.toString(),
+      userid: updateElement[3].value.toString(),
       username: updateElement[0].value.toString(),
-      clientid: updateElement[3].value.toString(),
+      email: updateElement[2].value.toString(),
+      clientid: updateElement[4].value.toString(),
     };
     res.status(200).write(JSON.stringify({ updatedElement: updateUser }));
   } else {
@@ -167,7 +175,7 @@ export const deleteUser = async (req: Request, res: Response, next: any) => {
   let query: QueryProps = {
     name: "userDeleteQuery",
     text: "DELETE FROM users WHERE userid=$1",
-    values: [deleteElement[2].value.toString()],
+    values: [deleteElement[3].value.toString()],
   };
   const { code, rows } = await performQuery(client, query);
   // Return the result of the delete query.
