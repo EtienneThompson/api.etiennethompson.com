@@ -1,11 +1,7 @@
 import { Request, Response } from "express";
 import { Client } from "pg";
 import { v4 as uuidv4 } from "uuid";
-import {
-  QueryProps,
-  performQuery,
-  performFormattedQuery,
-} from "../utils/database";
+import { QueryProps, DatabaseConnection } from "../utils/database";
 import { capitalize, isNullOrWhiteSpace } from "../utils/string";
 import {
   capitalizeName,
@@ -24,14 +20,13 @@ import {
   ColumnType,
   IsNullable,
   InsertedEntry,
-  ColumnSchemaInfo,
   FieldMetadata,
 } from "./types";
 
 const format = require("pg-format");
 
 const deleteInsertedEntries = async (
-  client: any,
+  client: DatabaseConnection,
   insertedEntries: InsertedEntry[]
 ): Promise<void> => {
   for (let entry of insertedEntries) {
@@ -40,8 +35,8 @@ const deleteInsertedEntries = async (
       text: `DELETE FROM ${entry.tableName} WHERE ${entry.tableName}_id = $1`,
       values: [entry.id],
     };
-    let { code, rows } = await performQuery(client, query);
-    if (code !== 200) {
+    let response = await client.PerformQuery(query);
+    if (response.code !== 200) {
       console.log(
         `Entry ${entry.id} failed to delete from table ${entry.tableName}`
       );
@@ -58,9 +53,9 @@ export const getClientDetails = async (
   res: Response,
   next: any
 ) => {
-  const client = req.body.awsClient;
+  const client = req.body.awsClient as DatabaseConnection;
 
-  let schema = await getClientSchema(client);
+  let schema = await getClientSchema(client.GetClient());
 
   if (schema === undefined) {
     res.status(400);
@@ -88,8 +83,8 @@ export const getClientDetails = async (
 
   let sql = `SELECT ${selectString} FROM clients ${joinString};`;
 
-  let { code, rows } = await performFormattedQuery(client, sql);
-  if (code !== 200 || rows.length === 0) {
+  let response = await client.PerformFormattedQuery(sql);
+  if (response.code !== 200 || response.rows.length === 0) {
     res.status(400);
     res.write(JSON.stringify({ message: "Failed to get clients." }));
     next();
@@ -98,7 +93,7 @@ export const getClientDetails = async (
 
   let allClientDetails: ClientDetails[] = [];
   // Need to use the client schema to parse all of the returned rows.
-  for (let details of rows) {
+  for (let details of response.rows) {
     // Create a deep copy of the schema tabs.
     let clientDetails: ClientDetails = {
       id: details.id,
@@ -129,9 +124,9 @@ export const getNewClientSchema = async (
   res: Response,
   next: any
 ) => {
-  const client = req.body.awsClient;
+  const client = req.body.awsClient as DatabaseConnection;
 
-  let schema = await getClientSchema(client);
+  let schema = await getClientSchema(client.GetClient());
 
   if (schema === undefined) {
     res.status(400);
@@ -150,7 +145,7 @@ export const postNewClientDetails = async (
   res: Response,
   next: any
 ) => {
-  const client = req.body.awsClient;
+  const client = req.body.awsClient as DatabaseConnection;
   const newClient = req.body.formData as ClientDetails;
 
   // Validate all required parameters are set.
@@ -213,8 +208,8 @@ export const postNewClientDetails = async (
       text: `INSERT INTO ${tabData.name} (${insertNames}) VALUES (${valuePlaceholders});`,
       values: values,
     };
-    let { code, rows } = await performQuery(client, query);
-    if (code !== 200) {
+    let response = await client.PerformQuery(query);
+    if (response.code !== 200) {
       await deleteInsertedEntries(client, insertedEntries);
       res.status(500);
       res.write(
@@ -238,8 +233,8 @@ export const postNewClientDetails = async (
     )}) VALUES (${foreignPlaceholders.join(", ")});`,
     values: foreignKeys,
   };
-  let { code, rows } = await performQuery(client, query);
-  if (code !== 200) {
+  let response = await client.PerformQuery(query);
+  if (response.code !== 200) {
     await deleteInsertedEntries(client, insertedEntries);
     res.status(500);
     res.write(JSON.stringify({ message: "Unable to insert into clients." }));
@@ -256,7 +251,7 @@ export const updateClientDetails = async (
   res: Response,
   next: any
 ) => {
-  const client = req.body.awsClient;
+  const client = req.body.awsClient as DatabaseConnection;
   const clientDetails = req.body.clientDetails as ClientDetails;
 
   // Validate all required parameters are set.
@@ -280,14 +275,14 @@ export const updateClientDetails = async (
     text: "SELECT * FROM clients WHERE id=$1;",
     values: [clientDetails.id],
   };
-  let { code, rows } = await performQuery(client, query);
-  if (code !== 200) {
+  let response = await client.PerformQuery(query);
+  if (response.code !== 200) {
     res.status(400);
     res.write(JSON.stringify({ message: "Failed to get client entries." }));
     next();
     return;
   }
-  let entries = rows[0];
+  let entries = response.rows[0];
 
   for (let tabData of clientDetails.tabs) {
     // Get the list of column names and values to insert.
@@ -335,8 +330,8 @@ export const updateClientDetails = async (
         }_id = '${entries[tabData.name]}';`,
         values: values,
       };
-      let { code, rows } = await performQuery(client, query);
-      if (code !== 200) {
+      let response = await client.PerformQuery(query);
+      if (response.code !== 200) {
         res.status(400);
         res.write(
           JSON.stringify({
@@ -356,8 +351,8 @@ export const updateClientDetails = async (
         text: `INSERT INTO ${tabData.name} (${insertNames}) VALUES (${valuePlaceholders});`,
         values: values,
       };
-      let { code, rows } = await performQuery(client, query);
-      if (code !== 200) {
+      let response = await client.PerformQuery(query);
+      if (response.code !== 200) {
         res.status(400);
         res.write(
           JSON.stringify({ message: `Unable to insert into ${tabData.name}.` })
@@ -371,8 +366,8 @@ export const updateClientDetails = async (
         text: `UPDATE clients SET ${tabData.name} = '${entryId}' WHERE id = '${clientDetails.id}';`,
         values: [],
       };
-      ({ code, rows } = await performQuery(client, query));
-      if (code !== 200) {
+      response = await client.PerformQuery(query);
+      if (response.code !== 200) {
         deleteInsertedEntries(client, [
           { tableName: tabData.name, id: entryId },
         ]);
@@ -393,7 +388,7 @@ export const updateClientDetails = async (
 };
 
 export const deleteClient = async (req: Request, res: Response, next: any) => {
-  const client = req.body.awsClient;
+  const client = req.body.awsClient as DatabaseConnection;
   const clientId = req.body.clientId;
 
   let query: QueryProps = {
@@ -401,8 +396,8 @@ export const deleteClient = async (req: Request, res: Response, next: any) => {
     text: "SELECT * FROM clients WHERE id=$1",
     values: [clientId],
   };
-  let { code, rows } = await performQuery(client, query);
-  if (code !== 200 || rows.length === 0) {
+  let response = await client.PerformQuery(query);
+  if (response.code !== 200 || response.rows.length === 0) {
     res.status(400);
     res.write(
       JSON.stringify({ message: "Failed to get the client's details." })
@@ -416,8 +411,8 @@ export const deleteClient = async (req: Request, res: Response, next: any) => {
     text: "DELETE FROM clients WHERE id=$1 RETURNING *;",
     values: [clientId],
   };
-  ({ code, rows } = await performQuery(client, query));
-  if (code !== 200 || rows.length === 0) {
+  response = await client.PerformQuery(query);
+  if (response.code !== 200 || response.rows.length === 0) {
     res.status(400);
     res.write(
       JSON.stringify({ message: "Failed to delete the client details." })
@@ -426,16 +421,15 @@ export const deleteClient = async (req: Request, res: Response, next: any) => {
     return;
   }
 
-  console.log(rows[0]);
-  for (const [tableName, id] of Object.entries(rows[0])) {
+  for (const [tableName, id] of Object.entries(response.rows[0])) {
     if (tableName === "id") {
       continue;
     }
 
     let sqlString = `DELETE FROM %I WHERE ${tableName}_id='%s' RETURNING *;`;
     let sql = format(sqlString, tableName, id);
-    let { code, rows } = await performFormattedQuery(client, sql);
-    if (code !== 200 || rows.length === 0) {
+    let response = await client.PerformFormattedQuery(sql);
+    if (response.code !== 200 || response.rows.length === 0) {
       res.status(400);
       res.write(
         JSON.stringify({ message: "Failed to delete the client details." })
@@ -450,10 +444,10 @@ export const deleteClient = async (req: Request, res: Response, next: any) => {
 };
 
 export const getAllTabs = async (req: Request, res: Response, next: any) => {
-  const client = req.body.awsClient;
+  const client = req.body.awsClient as DatabaseConnection;
 
   // Get all column names other than the id field.
-  let tableNames = await getTableSchema(client, "clients");
+  let tableNames = await getTableSchema(client.GetClient(), "clients");
   let tabNames = tableNames.map((name) => capitalizeName(name.column_name));
 
   res.status(200);
@@ -462,7 +456,7 @@ export const getAllTabs = async (req: Request, res: Response, next: any) => {
 };
 
 export const createTab = async (req: Request, res: Response, next: any) => {
-  const client = req.body.awsClient;
+  const client = req.body.awsClient as DatabaseConnection;
   const tabName = createTabName(req.body.tabName);
   const tabNameKey = `${tabName}_id`;
 
@@ -472,8 +466,8 @@ export const createTab = async (req: Request, res: Response, next: any) => {
     text: `CREATE TABLE ${tabName} (${tabNameKey} VARCHAR(36) PRIMARY KEY);`,
     values: [],
   };
-  let { code, rows } = await performQuery(client, query);
-  if (code !== 200) {
+  let response = await client.PerformQuery(query);
+  if (response.code !== 200) {
     res.status(400);
     res.write(JSON.stringify({ message: `Could not create tab ${tabName}.` }));
     next();
@@ -485,8 +479,8 @@ export const createTab = async (req: Request, res: Response, next: any) => {
     text: `ALTER TABLE clients ADD COLUMN ${tabName} VARCHAR(36) CONSTRAINT clients_${tabName}_fk_${tabNameKey} REFERENCES ${tabName} (${tabNameKey});`,
     values: [],
   };
-  ({ code, rows } = await performQuery(client, query));
-  if (code !== 200) {
+  response = await client.PerformQuery(query);
+  if (response.code !== 200) {
     res.status(400);
     res.write(
       JSON.stringify({
@@ -506,13 +500,13 @@ export const updateTabName = async (
   res: Response,
   next: any
 ) => {
-  const client = req.body.awsClient;
+  const client = req.body.awsClient as DatabaseConnection;
   const currentName = createTabName(req.body.currentName);
   const newName = createTabName(req.body.newName);
 
   let sql = format("ALTER TABLE %I RENAME TO %s;", currentName, newName);
-  let { code, rows } = await performFormattedQuery(client, sql);
-  if (code !== 200) {
+  let response = await client.PerformFormattedQuery(sql);
+  if (response.code !== 200) {
     res.status(400);
     res.write(
       JSON.stringify({
@@ -526,8 +520,8 @@ export const updateTabName = async (
   // ALTER TABLE ${newName} RENAME CONSTRAINT ${currentName}_pkey TO ${newName}_pkey;
   let sqlString = `ALTER TABLE %I RENAME CONSTRAINT ${currentName}_PKEY TO ${newName}_pkey;`;
   sql = format(sqlString, newName);
-  ({ code, rows } = await performFormattedQuery(client, sql));
-  if (code !== 200) {
+  response = await client.PerformFormattedQuery(sql);
+  if (response.code !== 200) {
     res.status(400);
     res.write(
       JSON.stringify({
@@ -541,8 +535,8 @@ export const updateTabName = async (
   // ALTER TABLE ${newName} RENAME COLUMN ${currentName)_id TO ${newName}_id;
   sqlString = `ALTER TABLE %I RENAME COLUMN ${currentName}_id TO ${newName}_id;`;
   sql = format(sqlString, newName);
-  ({ code, rows } = await performFormattedQuery(client, sql));
-  if (code !== 200) {
+  response = await client.PerformFormattedQuery(sql);
+  if (response.code !== 200) {
     res.status(400);
     res.write(
       JSON.stringify({
@@ -556,8 +550,8 @@ export const updateTabName = async (
   // ALTER TABLE clients RENAME COLUMN ${currentName} TO ${newName};
   sqlString = `ALTER TABLE clients RENAME COLUMN %s TO %s;`;
   sql = format(sqlString, currentName, newName);
-  ({ code, rows } = await performFormattedQuery(client, sql));
-  if (code !== 200) {
+  response = await client.PerformFormattedQuery(sql);
+  if (response.code !== 200) {
     res.status(400);
     res.write(
       JSON.stringify({
@@ -571,8 +565,8 @@ export const updateTabName = async (
   sqlString =
     "UPDATE field_metadata SET tab_name='%s' WHERE tab_name='%s' RETURNING *;";
   sql = format(sqlString, newName, currentName);
-  ({ code, rows } = await performFormattedQuery(client, sql));
-  if (code !== 200 || rows.length === 0) {
+  response = await client.PerformFormattedQuery(sql);
+  if (response.code !== 200 || response.rows.length === 0) {
     res.status(400);
     res.write(
       JSON.stringify({
@@ -584,7 +578,7 @@ export const updateTabName = async (
   }
 
   // Need to now rename all fields in that table, as their hash will be different now.
-  let schema = await getTableSchema(client, newName);
+  let schema = await getTableSchema(client.GetClient(), newName);
 
   for (let column of schema) {
     if (column.column_name.endsWith("id")) {
@@ -595,8 +589,8 @@ export const updateTabName = async (
     let newFieldName = createFieldName(newName, column.column_name);
     sqlString = "ALTER TABLE %I RENAME COLUMN %s TO %s;";
     sql = format(sqlString, newName, oldFieldName, newFieldName);
-    ({ code, rows } = await performFormattedQuery(client, sql));
-    if (code !== 200) {
+    response = await client.PerformFormattedQuery(sql);
+    if (response.code !== 200) {
       res.status(400);
       res.write(JSON.stringify({ message: "Failed to rename column" }));
       next();
@@ -606,8 +600,8 @@ export const updateTabName = async (
     sqlString =
       "UPDATE field_metadata SET field_name='%s' WHERE field_name='%s' RETURNING *;";
     sql = format(sqlString, newFieldName, oldFieldName);
-    ({ code, rows } = await performFormattedQuery(client, sql));
-    if (code !== 200) {
+    response = await client.PerformFormattedQuery(sql);
+    if (response.code !== 200) {
       res.status(400);
       res.write(
         JSON.stringify({ message: "Failed to rename metadata column" })
@@ -622,7 +616,7 @@ export const updateTabName = async (
 };
 
 export const deleteTab = async (req: Request, res: Response, next: any) => {
-  const client = req.body.awsClient;
+  const client = req.body.awsClient as DatabaseConnection;
   const tabName = createTabName(req.body.tabName);
 
   let query: QueryProps = {
@@ -630,8 +624,8 @@ export const deleteTab = async (req: Request, res: Response, next: any) => {
     text: `ALTER TABLE clients DROP COLUMN ${tabName};`,
     values: [],
   };
-  let { code, rows } = await performQuery(client, query);
-  if (code !== 200) {
+  let response = await client.PerformQuery(query);
+  if (response.code !== 200) {
     res.status(400);
     res.write(
       JSON.stringify({
@@ -647,8 +641,8 @@ export const deleteTab = async (req: Request, res: Response, next: any) => {
     text: `DROP TABLE ${tabName};`,
     values: [],
   };
-  ({ code, rows } = await performQuery(client, query));
-  if (code !== 200) {
+  response = await client.PerformQuery(query);
+  if (response.code !== 200) {
     res.status(400);
     res.write(JSON.stringify({ message: `Failed to drop table ${tabName}` }));
     next();
@@ -661,8 +655,8 @@ export const deleteTab = async (req: Request, res: Response, next: any) => {
     text: "DELETE FROM field_metadata WHERE tab_name=$1;",
     values: [tabName],
   };
-  ({ code, rows } = await performQuery(client, query));
-  if (code !== 200) {
+  response = await client.PerformQuery(query);
+  if (response.code !== 200) {
     res.status(400);
     res.write(
       JSON.stringify({
@@ -678,13 +672,16 @@ export const deleteTab = async (req: Request, res: Response, next: any) => {
 };
 
 export const getAllFields = async (req: Request, res: Response, next: any) => {
-  const client = req.body.awsClient;
+  const client = req.body.awsClient as DatabaseConnection;
 
-  let tableNames = await getTableSchema(client, "clients");
+  let tableNames = await getTableSchema(client.GetClient(), "clients");
   let allFieldNames: string[] = [];
 
   for (let tableName of tableNames) {
-    let fieldNames = await getTableSchema(client, tableName.column_name);
+    let fieldNames = await getTableSchema(
+      client.GetClient(),
+      tableName.column_name
+    );
     allFieldNames = allFieldNames.concat(
       fieldNames.map((name) => capitalizeName(name.column_name))
     );
@@ -700,10 +697,10 @@ export const getFieldsForTab = async (
   res: Response,
   next: any
 ) => {
-  const client = req.body.awsClient;
+  const client = req.body.awsClient as DatabaseConnection;
   const tabName = createTabName(req.query.tabName as string);
 
-  let fieldNames = await getTableSchema(client, tabName);
+  let fieldNames = await getTableSchema(client.GetClient(), tabName);
   const fieldStringNames = fieldNames.map((name) =>
     capitalizeName(name.column_name)
   );
@@ -718,13 +715,13 @@ export const getFieldSchema = async (
   res: Response,
   next: any
 ) => {
-  const client = req.body.awsClient;
+  const client = req.body.awsClient as DatabaseConnection;
   const tabName = createTabName(req.query.tabName as string);
   let fieldName = createTabName(req.query.fieldName as string);
 
   let rows;
   try {
-    rows = await getTableSchema(client, tabName);
+    rows = await getTableSchema(client.GetClient(), tabName);
   } catch (e: any) {
     res.status(400);
     res.write(JSON.stringify({ message: e.message }));
@@ -735,7 +732,7 @@ export const getFieldSchema = async (
   let metadata;
   try {
     metadata = await getFieldMetadata(
-      client,
+      client.GetClient(),
       createFieldName(tabName, fieldName)
     );
   } catch (e: any) {
@@ -768,7 +765,7 @@ export const getFieldSchema = async (
       type = "select";
       value = "---";
 
-      options = await getEnumTypeValues(client, field.udt_name);
+      options = await getEnumTypeValues(client.GetClient(), field.udt_name);
       if (options !== undefined && options[0] !== "---") {
         options.splice(0, 0, "---");
       }
@@ -800,12 +797,12 @@ export const getFieldsMetadata = async (
   res: Response,
   next: any
 ) => {
-  const client = req.body.awsClient;
+  const client = req.body.awsClient as DatabaseConnection;
   const tabName = createTabName(req.query.tabName as string);
 
   let metadata: FieldMetadata[] = [];
   try {
-    metadata = await getFieldMetadataForTab(client, tabName);
+    metadata = await getFieldMetadataForTab(client.GetClient(), tabName);
   } catch (e: any) {
     res.status(400);
     res.write(JSON.stringify({ message: e.message }));
@@ -831,7 +828,7 @@ export const reorderFields = async (
   res: Response,
   next: any
 ) => {
-  const client = req.body.awsClient;
+  const client = req.body.awsClient as DatabaseConnection;
   const fieldMetadata = req.body.fieldMetadata as FieldMetadata[];
 
   for (let metadata of fieldMetadata) {
@@ -844,8 +841,8 @@ export const reorderFields = async (
       text: "UPDATE field_metadata SET position = $1 WHERE tab_name=$2 AND field_name=$3 RETURNING *;",
       values: [metadata.position, metadata.tab_name, fieldName],
     };
-    const { code, rows } = await performQuery(client, query);
-    if (code !== 200 || rows.length === 0) {
+    const response = await client.PerformQuery(query);
+    if (response.code !== 200 || response.rows.length === 0) {
       res.status(400);
       res.write(
         JSON.stringify({
@@ -862,7 +859,7 @@ export const reorderFields = async (
 };
 
 export const createField = async (req: Request, res: Response, next: any) => {
-  const client = req.body.awsClient;
+  const client = req.body.awsClient as DatabaseConnection;
   const tabName = req.body.tabName.toLowerCase() as string;
   const fieldData = req.body.fieldData as DatabaseColumn;
 
@@ -904,8 +901,8 @@ export const createField = async (req: Request, res: Response, next: any) => {
       text: createEnumQuery,
       values: [],
     };
-    let { code, rows } = await performQuery(client, enumQuery);
-    if (code !== 200) {
+    let response = await client.PerformQuery(enumQuery);
+    if (response.code !== 200) {
       res.status(400);
       res.write(
         JSON.stringify({ message: `Failed to create the enum ${enumName}` })
@@ -946,8 +943,8 @@ export const createField = async (req: Request, res: Response, next: any) => {
     text: queryText,
     values: [],
   };
-  let { code, rows } = await performQuery(client, query);
-  if (code !== 200) {
+  let response = await client.PerformQuery(query);
+  if (response.code !== 200) {
     res.status(400);
     res.write(
       JSON.stringify({
@@ -962,14 +959,14 @@ export const createField = async (req: Request, res: Response, next: any) => {
   let metadataId = uuidv4();
   // Subtract 2 from the number of fields to account for the ID field and the
   // newly created field.
-  let position = (await getNumberOfFields(client, tabId)) - 2;
+  let position = (await getNumberOfFields(client.GetClient(), tabId)) - 2;
   query = {
     name: "CreateFieldMetadata",
     text: "INSERT INTO field_metadata (metadata_id, tab_name, field_name, position) VALUES ($1, $2, $3, $4);",
     values: [metadataId, tabId, fieldName, position],
   };
-  ({ code, rows } = await performQuery(client, query));
-  if (code !== 200) {
+  response = await client.PerformQuery(query);
+  if (response.code !== 200) {
     res.status(400);
     res.write(
       JSON.stringify({
@@ -985,7 +982,7 @@ export const createField = async (req: Request, res: Response, next: any) => {
 };
 
 export const updateField = async (req: Request, res: Response, next: any) => {
-  const client: Client = req.body.awsClient;
+  const client = req.body.awsClient as DatabaseConnection;
   const tabName: string = createTabName(req.body.tabName);
   const fieldName: string = createFieldName(tabName, req.body.fieldName);
   const fieldValues: DatabaseColumn = req.body.fieldValues;
@@ -1001,8 +998,8 @@ export const updateField = async (req: Request, res: Response, next: any) => {
       text: `ALTER TABLE ${tabName} RENAME COLUMN ${fieldName} TO ${newFieldName};`,
       values: [],
     };
-    let { code, rows } = await performQuery(client, query);
-    if (code !== 200) {
+    let response = await client.PerformQuery(query);
+    if (response.code !== 200) {
       res.status(400);
       res.write(
         JSON.stringify({
@@ -1018,8 +1015,8 @@ export const updateField = async (req: Request, res: Response, next: any) => {
       text: "UPDATE field_metadata SET field_name = $1 WHERE field_name=$2 RETURNING *;",
       values: [newFieldName, fieldName],
     };
-    ({ code, rows } = await performQuery(client, query));
-    if (code !== 200 || rows.length === 0) {
+    response = await client.PerformQuery(query);
+    if (response.code !== 200 || response.rows.length === 0) {
       res.status(400);
       res.write(
         JSON.stringify({ message: "Couldn't update field metadata name." })
@@ -1044,8 +1041,8 @@ export const updateField = async (req: Request, res: Response, next: any) => {
     };
   }
 
-  let { code, rows } = await performQuery(client, query);
-  if (code !== 200) {
+  let response = await client.PerformQuery(query);
+  if (response.code !== 200) {
     res.status(400);
     res.write(
       JSON.stringify({
@@ -1065,8 +1062,8 @@ export const updateField = async (req: Request, res: Response, next: any) => {
         text: `ALTER TYPE ${fieldName} RENAME TO ${newFieldName};`,
         values: [],
       };
-      let { code, rows } = await performQuery(client, query);
-      if (code !== 200) {
+      let response = await client.PerformQuery(query);
+      if (response.code !== 200) {
         res.status(400);
         res.write(
           JSON.stringify({ message: `Failed to rename the enum ${fieldName}` })
@@ -1082,8 +1079,8 @@ export const updateField = async (req: Request, res: Response, next: any) => {
       text: `SELECT unnest(enum_range(null::${newFieldName}));`,
       values: [],
     };
-    ({ code, rows } = await performQuery(client, query));
-    if (code !== 200) {
+    response = await client.PerformQuery(query);
+    if (response.code !== 200) {
       res.status(404);
       res.write(
         JSON.stringify({ message: "User defined enum not found in database." })
@@ -1092,7 +1089,7 @@ export const updateField = async (req: Request, res: Response, next: any) => {
       return;
     }
 
-    let options = rows.map((row) => row.unnest);
+    let options = response.rows.map((row) => row.unnest);
 
     // If there are no values or no new values, don't do anything.
     if (!fieldValues.options || options.length >= fieldValues.options.length) {
@@ -1111,8 +1108,8 @@ export const updateField = async (req: Request, res: Response, next: any) => {
         fieldValues.options[i],
         fieldValues.options[i - 1]
       );
-      ({ code, rows } = await performFormattedQuery(client, sql));
-      if (code !== 200) {
+      response = await client.PerformFormattedQuery(sql);
+      if (response.code !== 200) {
         res.status(400);
         res.write(
           JSON.stringify({
@@ -1130,7 +1127,7 @@ export const updateField = async (req: Request, res: Response, next: any) => {
 };
 
 export const deleteField = async (req: Request, res: Response, next: any) => {
-  const client = req.body.awsClient;
+  const client = req.body.awsClient as DatabaseConnection;
 
   const tabName = createTabName(req.body.tabName);
   const fieldName = createFieldName(tabName, req.body.fieldName);
@@ -1140,8 +1137,8 @@ export const deleteField = async (req: Request, res: Response, next: any) => {
     text: `ALTER TABLE ${tabName} DROP COLUMN ${fieldName};`,
     values: [],
   };
-  let { code, rows } = await performQuery(client, query);
-  if (code !== 200) {
+  let response = await client.PerformQuery(query);
+  if (response.code !== 200) {
     res.status(400);
     res.write(
       JSON.stringify({ message: `Failed to delete the field ${fieldName}` })
@@ -1156,8 +1153,8 @@ export const deleteField = async (req: Request, res: Response, next: any) => {
     text: "DELETE FROM field_metadata WHERE tab_name=$1 AND field_name=$2;",
     values: [tabName, fieldName],
   };
-  ({ code, rows } = await performQuery(client, query));
-  if (code !== 200) {
+  response = await client.PerformQuery(query);
+  if (response.code !== 200) {
     res.status(400);
     res.write(
       JSON.stringify({

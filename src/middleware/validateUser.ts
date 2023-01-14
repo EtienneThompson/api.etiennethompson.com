@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { BaseRequest, UserEntry } from "../types";
-import { QueryProps, performQuery } from "../utils/database";
+import { QueryProps, DatabaseConnection } from "../utils/database";
 import { getCurrentTimeField } from "../utils/date";
 import { closeDatabaseConnection } from "./closeDatabaseConnection";
 
@@ -17,7 +17,7 @@ export const validateUser = async (req: Request, res: Response, next: any) => {
     next();
     return;
   }
-  const client = req.body.client;
+  const client = req.body.client as DatabaseConnection;
 
   var reqBody = (
     req.body && req.body.clientid ? req.body : req.query
@@ -39,8 +39,8 @@ export const validateUser = async (req: Request, res: Response, next: any) => {
     text: "SELECT userid, session_expiration FROM users WHERE clientid=$1;",
     values: [reqBody.clientid],
   };
-  let { code, rows } = await performQuery(client, query);
-  if (code !== 200 || rows.length === 0) {
+  let response = await client.PerformQuery(query);
+  if (response.code !== 200 || response.rows.length === 0) {
     await closeDatabaseConnection(req);
     res.status(401).send({
       reason: AuthenticationFailureReason.InvalidClientId,
@@ -50,7 +50,9 @@ export const validateUser = async (req: Request, res: Response, next: any) => {
   }
 
   // Validate that the clientid hasn't expired.
-  let session_expiration = new Date((rows[0] as UserEntry).session_expiration);
+  let session_expiration = new Date(
+    (response.rows[0] as UserEntry).session_expiration
+  );
   let currentTime = new Date(getCurrentTimeField());
   let diff = session_expiration.getTime() - currentTime.getTime();
   if (diff < 0) {
@@ -62,16 +64,16 @@ export const validateUser = async (req: Request, res: Response, next: any) => {
     return;
   }
 
-  let userid = (rows[0] as UserEntry).userid;
+  let userid = (response.rows[0] as UserEntry).userid;
 
   query = {
     name: "validateGetApplicationQuery",
     text: "SELECT * FROM applications WHERE applicationid=$1;",
     values: [reqBody.appid],
   };
-  ({ code, rows } = await performQuery(client, query));
+  response = await client.PerformQuery(query);
 
-  if (code !== 200 || rows.length === 0) {
+  if (response.code !== 200 || response.rows.length === 0) {
     await closeDatabaseConnection(req);
     res.status(401).send({
       reason: AuthenticationFailureReason.InvalidAppId,
@@ -85,9 +87,9 @@ export const validateUser = async (req: Request, res: Response, next: any) => {
     text: "SELECT * FROM applicationusers WHERE applicationid=$1 AND userid=$2;",
     values: [reqBody.appid, userid],
   };
-  ({ code, rows } = await performQuery(client, query));
+  response = await client.PerformQuery(query);
 
-  if (code !== 200 || rows.length === 0) {
+  if (response.code !== 200 || response.rows.length === 0) {
     await closeDatabaseConnection(req);
     res.status(401).send({
       reason: AuthenticationFailureReason.InvalidUser,
@@ -96,7 +98,7 @@ export const validateUser = async (req: Request, res: Response, next: any) => {
     return;
   }
 
-  req.body.isMock = !(rows[0].isuser || rows[0].isadmin);
+  req.body.isMock = !(response.rows[0].isuser || response.rows[0].isadmin);
 
   next();
 };

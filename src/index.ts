@@ -1,4 +1,4 @@
-import express, { Request, Response } from "express";
+import express, { Request, Response, NextFunction } from "express";
 import { exceptionLogging } from "./middleware/exceptionLogging";
 import { createDatabaseConnection } from "./middleware/createDatabaseConnection";
 import { closeDatabaseConnectionMiddleware } from "./middleware/closeDatabaseConnection";
@@ -28,9 +28,9 @@ const handler = (req: Request, res: Response) => {
 const requestFactory = async (
   req: Request,
   res: Response,
-  next: any,
-  real: (req: Request, res: Response, next: any) => void,
-  mock: (req: Request, res: Response, next: any) => void
+  next: NextFunction,
+  real: (req: Request, res: Response, next: NextFunction) => void,
+  mock: (req: Request, res: Response, next: NextFunction) => void
 ) => {
   if (req.body.isMock) {
     await mock(req, res, next);
@@ -65,7 +65,6 @@ app.use(function (req, res, next) {
 
   next();
 });
-app.use(exceptionLogging);
 app.use(createDatabaseConnection);
 app.use(validateUser);
 
@@ -81,7 +80,7 @@ app.post("/login/reset", login.changePassword);
 app.get("/admin/dashboard/count", dashboard.getTableCounts);
 app.get(
   "/admin/users",
-  async (req: Request, res: Response, next: any) =>
+  async (req: Request, res: Response, next: NextFunction) =>
     await requestFactory(
       req,
       res,
@@ -92,7 +91,7 @@ app.get(
 );
 app.post(
   "/admin/users/create",
-  async (req: Request, res: Response, next: any) =>
+  async (req: Request, res: Response, next: NextFunction) =>
     await requestFactory(
       req,
       res,
@@ -103,7 +102,7 @@ app.post(
 );
 app.put(
   "/admin/users/update",
-  async (req: Request, res: Response, next: any) =>
+  async (req: Request, res: Response, next: NextFunction) =>
     await requestFactory(
       req,
       res,
@@ -114,7 +113,7 @@ app.put(
 );
 app.delete(
   "/admin/users/delete",
-  async (req: Request, res: Response, next: any) =>
+  async (req: Request, res: Response, next: NextFunction) =>
     await requestFactory(
       req,
       res,
@@ -127,7 +126,7 @@ app.delete(
 // Admin Applications routes.
 app.get(
   "/admin/applications",
-  async (req: Request, res: Response, next: any) =>
+  async (req: Request, res: Response, next: NextFunction) =>
     await requestFactory(
       req,
       res,
@@ -138,7 +137,7 @@ app.get(
 );
 app.post(
   "/admin/applications/create",
-  async (req: Request, res: Response, next: any) =>
+  async (req: Request, res: Response, next: NextFunction) =>
     await requestFactory(
       req,
       res,
@@ -149,7 +148,7 @@ app.post(
 );
 app.put(
   "/admin/applications/update",
-  async (req: Request, res: Response, next: any) =>
+  async (req: Request, res: Response, next: NextFunction) =>
     await requestFactory(
       req,
       res,
@@ -160,7 +159,7 @@ app.put(
 );
 app.delete(
   "/admin/applications/delete",
-  async (req: Request, res: Response, next: any) =>
+  async (req: Request, res: Response, next: NextFunction) =>
     await requestFactory(
       req,
       res,
@@ -173,7 +172,7 @@ app.delete(
 // Admin ApplicationUsers routes.
 app.get(
   "/admin/applicationusers",
-  async (req: Request, res: Response, next: any) =>
+  async (req: Request, res: Response, next: NextFunction) =>
     await requestFactory(
       req,
       res,
@@ -184,7 +183,7 @@ app.get(
 );
 app.post(
   "/admin/applicationusers/create",
-  async (req: Request, res: Response, next: any) =>
+  async (req: Request, res: Response, next: NextFunction) =>
     await requestFactory(
       req,
       res,
@@ -195,7 +194,7 @@ app.post(
 );
 app.put(
   "/admin/applicationusers/update",
-  async (req: Request, res: Response, next: any) =>
+  async (req: Request, res: Response, next: NextFunction) =>
     await requestFactory(
       req,
       res,
@@ -206,7 +205,7 @@ app.put(
 );
 app.delete(
   "/admin/applicationusers/delete",
-  async (req: Request, res: Response, next: any) =>
+  async (req: Request, res: Response, next: NextFunction) =>
     await requestFactory(
       req,
       res,
@@ -250,6 +249,7 @@ app.post("/thompsonaccounting/fields", accounting.createField);
 app.put("/thompsonaccounting/field", accounting.updateField);
 app.delete("/thompsonaccounting/field", accounting.deleteField);
 
+app.use(exceptionLogging);
 app.use(closeDatabaseConnectionMiddleware);
 
 app.listen(port, () => {

@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { QueryProps, performQuery } from "../../utils/database";
+import { QueryProps, DatabaseConnection } from "../../utils/database";
 import { TableNames, TableCount, CountData } from "./types";
 
 /**
@@ -14,21 +14,21 @@ export const getTableCounts = async (
   res: Response,
   next: any
 ): Promise<void> => {
-  const client = req.body.client;
+  const client = req.body.client as DatabaseConnection;
   // Query for all database table names in the database.
   let query: QueryProps = {
     name: "getTableNames",
     text: "SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE';",
     values: [],
   };
-  let { code, rows } = await performQuery(client, query);
-  if (code != 200) {
+  let response = await client.PerformQuery(query);
+  if (response.code != 200) {
     res.status(404);
     next();
     return;
   }
 
-  let tables: TableNames[] = rows;
+  let tables: TableNames[] = response.rows;
 
   let total = 0;
   let data: CountData = {
@@ -42,9 +42,9 @@ export const getTableCounts = async (
       text: `SELECT COUNT(*) FROM ${table.table_name}`,
       values: [],
     };
-    ({ code, rows } = await performQuery(client, query));
-    if (code == 200) {
-      let count: TableCount = rows[0];
+    response = await client.PerformQuery(query);
+    if (response.code == 200) {
+      let count: TableCount = response.rows[0];
       let countNum = parseInt(count.count);
       total += countNum;
       data.tables.push({ name: table.table_name, count: countNum });

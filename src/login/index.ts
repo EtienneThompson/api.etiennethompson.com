@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from "uuid";
 import aws from "aws-sdk";
 import { LoginRequest, ApplicationEntry, UserAdminStatus } from "./types";
 import { UserEntry } from "../types";
-import { QueryProps, performQuery, getUserId } from "../utils/database";
+import { QueryProps, DatabaseConnection } from "../utils/database";
 import {
   createHourExpiration,
   createMinuteExpiration,
@@ -11,7 +11,7 @@ import {
 } from "../utils/date";
 
 export const loginHandler = async (req: Request, res: Response, next: any) => {
-  const client = req.body.client;
+  const client = req.body.client as DatabaseConnection;
   var reqBody = req.body as LoginRequest;
 
   // Verify that the user exists and get the user's client id.
@@ -23,9 +23,9 @@ export const loginHandler = async (req: Request, res: Response, next: any) => {
     text: "SELECT clientid, userid, session_expiration FROM users WHERE username=$1 AND password=$2;",
     values: [reqBody.username, reqBody.hashedPassword],
   };
-  let { code, rows } = await performQuery(client, query);
-  if (code === 200 && rows.length > 0) {
-    const entry = rows[0] as UserEntry;
+  let response = await client.PerformQuery(query);
+  if (response.code === 200 && response.rows.length > 0) {
+    const entry = response.rows[0] as UserEntry;
     clientId = entry.clientid;
     userId = entry.userid;
     session_expiration = entry.session_expiration;
@@ -45,11 +45,11 @@ export const loginHandler = async (req: Request, res: Response, next: any) => {
     text: "SELECT redirecturl FROM applications WHERE applicationid=$1;",
     values: [reqBody.appid],
   };
-  ({ code, rows } = await performQuery(client, query));
-  if (code === 200 && rows) {
-    rows = rows as ApplicationEntry[];
-    for (let i = 0; i < rows.length; i++) {
-      const entry = rows[i] as ApplicationEntry;
+  response = await client.PerformQuery(query);
+  if (response.code === 200 && response.rows.length > 0) {
+    let data = response.rows as ApplicationEntry[];
+    for (let i = 0; i < data.length; i++) {
+      const entry = data[i] as ApplicationEntry;
       if (entry.redirecturl.indexOf(reqBody.redirectBase)) {
         redirectUrl = entry.redirecturl;
         break;
@@ -79,10 +79,10 @@ export const loginHandler = async (req: Request, res: Response, next: any) => {
     text: "SELECT isuser, isadmin FROM applicationusers WHERE userid=$1 AND applicationid=$2",
     values: [userId, reqBody.appid],
   };
-  ({ code, rows } = await performQuery(client, query));
+  response = await client.PerformQuery(query);
   let isUser: boolean = false;
   let isAdmin: boolean = false;
-  if (code !== 200) {
+  if (response.code !== 200 || response.rows.length === 0) {
     res.status(404).write(
       JSON.stringify({
         message: "That user is not a member of the given application.",
@@ -91,7 +91,7 @@ export const loginHandler = async (req: Request, res: Response, next: any) => {
     next();
     return;
   } else {
-    const appUsers = rows[0] as UserAdminStatus;
+    const appUsers = response.rows[0] as UserAdminStatus;
     isUser = appUsers.isuser;
     isAdmin = appUsers.isadmin;
   }
@@ -105,11 +105,11 @@ export const loginHandler = async (req: Request, res: Response, next: any) => {
     retClientId = uuidv4();
     const expiration = createHourExpiration();
     query = {
-      text: "UPDATE users SET clientid=$1, session_expiration=$2 WHERE userid=$3;",
+      text: "UPDATE users SET clientid=$1, session_expiration=$2 WHERE userid=$3 RETURNING *;",
       values: [retClientId, expiration, userId],
     };
-    ({ code, rows } = await performQuery(client, query));
-    if (code !== 200) {
+    response = await client.PerformQuery(query);
+    if (response.code !== 200 || response.rows.length === 0) {
       res
         .status(500)
         .write(JSON.stringify({ message: "There was an unexpected error. " }));
@@ -121,11 +121,11 @@ export const loginHandler = async (req: Request, res: Response, next: any) => {
     retClientId = clientId;
     const expiration = createHourExpiration();
     query = {
-      text: "UPDATE users SET session_expiration=$1 WHERE userid=$2;",
+      text: "UPDATE users SET session_expiration=$1 WHERE userid=$2 RETURNING *;",
       values: [expiration, userId],
     };
-    ({ code, rows } = await performQuery(client, query));
-    if (code != 200) {
+    response = await client.PerformQuery(query);
+    if (response.code != 200 || response.rows.length === 0) {
       res
         .status(500)
         .write(JSON.stringify({ message: "There was an unexpected error. " }));
@@ -150,8 +150,8 @@ export const sendResetPasswordEmail = async (
   res: Response,
   next: any
 ) => {
-  const client = req.body.client;
-  var email = req.body.email;
+  const client = req.body.client as DatabaseConnection;
+  var email = req.body.email as string;
 
   // Lookup that the email entered is associated with an account.
   let query: QueryProps = {
@@ -159,8 +159,8 @@ export const sendResetPasswordEmail = async (
     text: "SELECT userid, username FROM users WHERE email=$1;",
     values: [email],
   };
-  let { code, rows } = await performQuery(client, query);
-  if (code !== 200 || rows.length === 0) {
+  let response = await client.PerformQuery(query);
+  if (response.code !== 200 || response.rows.length === 0) {
     res.status(400);
     res.write(
       JSON.stringify({ message: "Couldn't find a user with that email" })
@@ -179,8 +179,8 @@ export const sendResetPasswordEmail = async (
     text: "UPDATE users SET reset_code=$1, reset_expiration=$2 WHERE email=$3;",
     values: [resetCode, expiration, email],
   };
-  ({ code, rows } = await performQuery(client, query));
-  if (code !== 200) {
+  response = await client.PerformQuery(query);
+  if (response.code !== 200) {
     res.status(400);
     res.write(
       JSON.stringify({
@@ -238,9 +238,9 @@ export const changePassword = async (
   res: Response,
   next: any
 ) => {
-  const client = req.body.client;
-  const resetCode = req.body.resetCode;
-  const newPassword = req.body.newPassword;
+  const client = req.body.client as DatabaseConnection;
+  const resetCode = req.body.resetCode as string;
+  const newPassword = req.body.newPassword as string;
 
   const currentTime = getCurrentTimeField();
 
@@ -249,8 +249,8 @@ export const changePassword = async (
     text: "UPDATE users SET password=$1, reset_code=NULL, reset_expiration=NULL WHERE reset_code=$2 AND reset_expiration>=$3 RETURNING user;",
     values: [newPassword, resetCode, currentTime],
   };
-  const { code, rows } = await performQuery(client, query);
-  if (code !== 200 || rows.length === 0) {
+  const response = await client.PerformQuery(query);
+  if (response.code !== 200 || response.rows.length === 0) {
     res.status(400);
     res.write(
       JSON.stringify({

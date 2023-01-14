@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { v4 as uuidv4 } from "uuid";
-import { QueryProps, performQuery } from "../../utils/database";
+import { QueryProps, DatabaseConnection } from "../../utils/database";
 import { createHourExpiration } from "../../utils/date";
 import { AdminGetResponseData, DefaultValues } from "../../types";
 import { ReturnUser } from "./types";
@@ -22,15 +22,15 @@ export const getUsers = async (req: Request, res: Response, next: any) => {
     defaultValues: [],
   };
   // Get the users from the database.
-  const client = req.body.client;
+  const client = req.body.client as DatabaseConnection;
   let query: QueryProps = {
     name: "userGetQuery",
     text: "SELECT userid, username, email, clientid FROM users;",
     values: [],
   };
-  let { code, rows } = await performQuery(client, query);
-  if (code === 200) {
-    responseData.elements = rows;
+  let response = await client.PerformQuery(query);
+  if (response.code === 200) {
+    responseData.elements = response.rows;
   }
 
   // Every header.
@@ -85,7 +85,7 @@ export const getUsers = async (req: Request, res: Response, next: any) => {
  */
 export const createUser = async (req: Request, res: Response, next: any) => {
   // Get the required data from the request.
-  const client = req.body.client;
+  const client = req.body.client as DatabaseConnection;
   const newElement = req.body.newElement as DefaultValues[];
 
   // Generate new ids and fields for the user.
@@ -107,10 +107,10 @@ export const createUser = async (req: Request, res: Response, next: any) => {
     ],
   };
 
-  const { code, rows } = await performQuery(client, query);
+  const response = await client.PerformQuery(query);
 
   // Return data to the front end based on response.
-  if (code === 200) {
+  if (response.code === 200) {
     let newUser: ReturnUser = {
       userid: newUserId,
       username: newElement[0].value.toString(),
@@ -132,7 +132,7 @@ export const createUser = async (req: Request, res: Response, next: any) => {
  * @param next The next function in the request lifecycle.
  */
 export const updateUser = async (req: Request, res: Response, next: any) => {
-  const client = req.body.client;
+  const client = req.body.client as DatabaseConnection;
   var updateElement = req.body.updateElement as DefaultValues[];
 
   let query: QueryProps = {
@@ -144,9 +144,9 @@ export const updateUser = async (req: Request, res: Response, next: any) => {
       updateElement[3].value.toString(),
     ],
   };
-  const { code, rows } = await performQuery(client, query);
+  const response = await client.PerformQuery(query);
 
-  if (code === 200) {
+  if (response.code === 200) {
     let updateUser: ReturnUser = {
       userid: updateElement[3].value.toString(),
       username: updateElement[0].value.toString(),
@@ -168,7 +168,7 @@ export const updateUser = async (req: Request, res: Response, next: any) => {
  * @param next The next function in the request lifecycle.
  */
 export const deleteUser = async (req: Request, res: Response, next: any) => {
-  const client = req.body.client;
+  const client = req.body.client as DatabaseConnection;
   var deleteElement = req.body.deleteElement as DefaultValues[];
 
   // Construct delete query.
@@ -177,7 +177,7 @@ export const deleteUser = async (req: Request, res: Response, next: any) => {
     text: "DELETE FROM users WHERE userid=$1",
     values: [deleteElement[3].value.toString()],
   };
-  const { code, rows } = await performQuery(client, query);
+  const response = await client.PerformQuery(query);
   // Return the result of the delete query.
-  res.status(code);
+  res.status(response.code);
 };

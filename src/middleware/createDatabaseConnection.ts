@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { connectToDatabase, connectToAWSDatabase } from "../utils/database";
+import { DatabaseConnection } from "../utils/database";
 
 export const createDatabaseConnection = async (
   req: Request,
@@ -19,11 +19,13 @@ export const createDatabaseConnection = async (
       return;
     }
 
-    const awsClient = await connectToAWSDatabase(
+    const awsClient = new DatabaseConnection();
+    await awsClient.Initialize(
       process.env.THOMPSON_ACCOUNTING_DATABASE_HOST,
       process.env.THOMPSON_ACCOUNTING_DATABASE_USER,
       process.env.THOMPSON_ACCOUNTING_DATABASE_PASSWORD,
-      process.env.THOMPSON_ACCOUNTING_DATABASE_DATABASE
+      process.env.THOMPSON_ACCOUNTING_DATABASE_DATABASE,
+      5432
     );
     req.body.awsClient = awsClient;
   }
@@ -35,9 +37,11 @@ export const createDatabaseConnection = async (
     return;
   }
 
-  const client = await connectToDatabase(process.env.DATABASE_URL);
-
+  // const client = await connectToDatabase(process.env.DATABASE_URL);
+  const client = new DatabaseConnection();
+  await client.InitializeByConnectionString(process.env.DATABASE_URL);
   req.body.client = client;
+
   res.type("json");
   next();
 };

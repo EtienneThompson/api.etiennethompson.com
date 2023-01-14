@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { QueryProps, performQuery } from "../../utils/database";
+import { QueryProps, DatabaseConnection } from "../../utils/database";
 import { AdminGetResponseData, DefaultValues } from "../../types";
 import { ApplicationUser, ReturnAppUser } from "./types";
 
@@ -22,7 +22,7 @@ export const getApplicationUsers = async (
     newFields: [],
     defaultValues: [],
   };
-  const client = req.body.client;
+  const client = req.body.client as DatabaseConnection;
 
   // Get the list of all users.
   let query: QueryProps = {
@@ -30,11 +30,14 @@ export const getApplicationUsers = async (
     text: "SELECT userid, username FROM users;",
     values: [],
   };
-  let users: any[] = [];
-  let { code, rows } = await performQuery(client, query);
-  if (code === 200) {
-    users = rows;
+  let response = await client.PerformQuery(query);
+  if (response.code !== 200 || response.rows.length === 0) {
+    res.status(400);
+    res.write(JSON.stringify({ message: "Could not get users." }));
+    next();
+    return;
   }
+  let users = response.rows;
 
   // Get the list of all applications.
   query = {
@@ -42,11 +45,14 @@ export const getApplicationUsers = async (
     text: "SELECT applicationid, applicationname FROM applications;",
     values: [],
   };
-  let apps: any[] = [];
-  ({ code, rows } = await performQuery(client, query));
-  if (code === 200) {
-    apps = rows;
+  response = await client.PerformQuery(query);
+  if (response.code !== 200 || response.rows.length === 0) {
+    res.status(400);
+    res.write(JSON.stringify({ message: "Could not get applications." }));
+    next();
+    return;
   }
+  let apps = response.rows;
 
   // Get the list of all application users.
   query = {
@@ -54,11 +60,11 @@ export const getApplicationUsers = async (
     text: "SELECT userid, applicationid, isuser, isadmin FROM applicationusers;",
     values: [],
   };
-  ({ code, rows } = await performQuery(client, query));
+  response = await client.PerformQuery(query);
 
   // Construct a list of all app users with actual usernames and app names.
-  if (code === 200) {
-    rows.map((row: ApplicationUser) => {
+  if (response.code === 200) {
+    response.rows.map((row: ApplicationUser) => {
       responseData.elements.push({
         user: users.filter((user) => user.userid === row.userid)[0].username,
         application: apps.filter(
@@ -142,7 +148,7 @@ export const createApplicationUser = async (
   res: Response,
   next: any
 ) => {
-  const client = req.body.client;
+  const client = req.body.client as DatabaseConnection;
   const newElement = req.body.newElement as DefaultValues[];
 
   // Construct query to create the new application user.
@@ -156,11 +162,11 @@ export const createApplicationUser = async (
       newElement[3].value.toString() === "true",
     ],
   };
-  const { code, rows } = await performQuery(client, query);
+  const response = await client.PerformQuery(query);
 
   // Return data based on query code, setting the user and application based on
   // the ids.
-  if (code === 200) {
+  if (response.code === 200) {
     let newAppUser: ReturnAppUser = {
       user: newElement[0].options
         ? newElement[0].options.filter(
@@ -195,7 +201,7 @@ export const updateApplicationUser = async (
   res: Response,
   next: any
 ) => {
-  const client = req.body.client;
+  const client = req.body.client as DatabaseConnection;
   var updateElement = req.body.updateElement as DefaultValues[];
 
   // Construct the query, filtering the given user and application for their
@@ -218,10 +224,10 @@ export const updateApplicationUser = async (
         : "",
     ],
   };
-  const { code, rows } = await performQuery(client, query);
+  const response = await client.PerformQuery(query);
 
   // Send back the information based on code.
-  if (code === 200) {
+  if (response.code === 200) {
     let updateAppUser: ReturnAppUser = {
       user: updateElement[0].value.toString(),
       application: updateElement[1].value.toString(),
@@ -250,7 +256,7 @@ export const deleteApplicationUser = async (
   res: Response,
   next: any
 ) => {
-  const client = req.body.client;
+  const client = req.body.client as DatabaseConnection;
   var deleteElement = req.body.deleteElement as DefaultValues[];
 
   // Construct the query, replacing the user and application fields with their
@@ -273,6 +279,6 @@ export const deleteApplicationUser = async (
   };
 
   // Send back the result of the operation.
-  const { code, rows } = await performQuery(client, query);
-  res.status(code);
+  const response = await client.PerformQuery(query);
+  res.status(response.code);
 };

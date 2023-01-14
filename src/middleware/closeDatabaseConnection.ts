@@ -1,9 +1,10 @@
 import { Request, Response } from "express";
 import { Client } from "pg";
+import { DatabaseConnection } from "../utils/database";
 
 const closeDatabaseConnectionInternal = async (req: Request) => {
-  const client: Client = req.body.client;
-  await client.end();
+  const client: DatabaseConnection = req.body.client;
+  await client.Close();
 
   if (req.body.awsClient) {
     const awsClient: Client = req.body.awsClient;

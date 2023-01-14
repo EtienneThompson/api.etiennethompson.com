@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { v4 as uuidv4 } from "uuid";
-import { QueryProps, performQuery } from "../../utils/database";
+import { QueryProps, DatabaseConnection } from "../../utils/database";
 import { ReturnApp } from "./types";
 import { AdminGetResponseData, DefaultValues } from "../../types";
 
@@ -24,16 +24,21 @@ export const getApplications = async (
     defaultValues: [],
   };
   // Get list of the application fields.
-  const client = req.body.client;
+  const client = req.body.client as DatabaseConnection;
   let query: QueryProps = {
     name: "applicationGetQuery",
     text: "SELECT applicationid, applicationname, redirecturl FROM applications;",
     values: [],
   };
-  let { code, rows } = await performQuery(client, query);
-  if (code === 200) {
-    responseData.elements = rows;
+  let response = await client.PerformQuery(query);
+  if (response.code !== 200 || response.rows.length === 0) {
+    res.status(400);
+    res.write(JSON.stringify({ message: "Could not get applications." }));
+    next();
+    return;
   }
+
+  responseData.elements = response.rows;
 
   let allHeaders = [
     { text: "Application ID", field: "applicationid", type: "text" },
@@ -85,7 +90,7 @@ export const createApplication = async (
   res: Response,
   next: any
 ) => {
-  const client = req.body.client;
+  const client = req.body.client as DatabaseConnection;
   const newElement = req.body.newElement as DefaultValues[];
 
   // Generate a new application id.
@@ -94,17 +99,17 @@ export const createApplication = async (
   // Construct the query to create the application.
   let query: QueryProps = {
     name: "appInsertQuery",
-    text: "INSERT INTO applications (applicationid, applicationname, redirecturl) VALUES ($1, $2, $3);",
+    text: "INSERT INTO applications (applicationid, applicationname, redirecturl) VALUES ($1, $2, $3) RETURNING *;",
     values: [
       newAppId,
       newElement[1].value.toString(),
       newElement[2].value.toString(),
     ],
   };
-  const { code, rows } = await performQuery(client, query);
+  const response = await client.PerformQuery(query);
 
   // Send appropriate data back to front end.
-  if (code === 200) {
+  if (response.code === 200 && response.rows.length !== 0) {
     let newApp: ReturnApp = {
       applicationid: newAppId,
       applicationname: newElement[1].value.toString(),
@@ -130,23 +135,23 @@ export const updateApplication = async (
   res: Response,
   next: any
 ) => {
-  const client = req.body.client;
+  const client = req.body.client as DatabaseConnection;
   var updateElement = req.body.updateElement as DefaultValues[];
 
   // Construct the query to update the application.
   let query: QueryProps = {
     name: "appUpdateQuery",
-    text: "UPDATE applications SET applicationname=$1, redirecturl=$2 WHERE applicationid=$3",
+    text: "UPDATE applications SET applicationname=$1, redirecturl=$2 WHERE applicationid=$3 RETURNING *;",
     values: [
       updateElement[1].value.toString(),
       updateElement[2].value.toString(),
       updateElement[0].value.toString(),
     ],
   };
-  const { code, rows } = await performQuery(client, query);
+  const response = await client.PerformQuery(query);
 
   // Return the appropriate data.
-  if (code === 200) {
+  if (response.code === 200 && response.rows.length !== 0) {
     let udpatedApp: ReturnApp = {
       applicationid: updateElement[0].value.toString(),
       applicationname: updateElement[1].value.toString(),
@@ -171,7 +176,7 @@ export const deleteApplication = async (
   res: Response,
   next: any
 ) => {
-  const client = req.body.client;
+  const client = req.body.client as DatabaseConnection;
   var deleteElement = req.body.deleteElement as DefaultValues[];
 
   // Construct the query.
@@ -180,7 +185,7 @@ export const deleteApplication = async (
     text: "DELETE FROM applications WHERE applicationid=$1;",
     values: [deleteElement[0].value.toString()],
   };
-  const { code, rows } = await performQuery(client, query);
+  const response = await client.PerformQuery(query);
   // Return the result of the query.
-  res.status(code);
+  res.status(response.code);
 };
