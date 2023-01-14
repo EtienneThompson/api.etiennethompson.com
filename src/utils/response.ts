@@ -69,6 +69,12 @@ export class ResponseHelper {
     this.next();
   }
 
+  public Unauthorized(message: string) {
+    this.res.status(ErrorStatusCode.Unauthorized);
+    this.res.write(JSON.stringify({ message: message }));
+    this.res.end();
+  }
+
   public End() {
     this.res.end();
   }
