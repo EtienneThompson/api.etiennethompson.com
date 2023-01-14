@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { Client } from "pg";
 import { DatabaseConnection } from "../utils/database";
+import { ResponseHelper } from "../utils/response";
 
 const closeDatabaseConnectionInternal = async (req: Request) => {
   const client: DatabaseConnection = req.body.client;
@@ -22,5 +23,6 @@ export const closeDatabaseConnectionMiddleware = async (
   next: any
 ) => {
   await closeDatabaseConnectionInternal(req);
-  res.end();
+  const responseHelper: ResponseHelper = req.body.response;
+  responseHelper.End();
 };

@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from "express";
+import { ErrorStatusCode, ResponseHelper } from "../utils/response";
 
 export const exceptionLogging = (
   err: any,
@@ -7,7 +8,6 @@ export const exceptionLogging = (
   next: NextFunction
 ) => {
   console.log(err);
-  res.status(500);
-  res.write(JSON.stringify(err));
-  next();
+  const responseHelper: ResponseHelper = req.body.response;
+  responseHelper.ErrorResponse(ErrorStatusCode.InternalServerError, err);
 };

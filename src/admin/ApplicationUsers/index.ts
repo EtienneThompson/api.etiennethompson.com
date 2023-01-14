@@ -2,6 +2,12 @@ import { Request, Response, NextFunction } from "express";
 import { QueryProps, DatabaseConnection } from "../../utils/database";
 import { AdminGetResponseData, DefaultValues } from "../../types";
 import { ApplicationUser, ReturnAppUser } from "./types";
+import {
+  ErrorStatusCode,
+  HttpStatusCode,
+  ResponseHelper,
+  SuccessfulStatusCode,
+} from "../../utils/response";
 
 /**
  * Gets a list of all application users.
@@ -23,6 +29,7 @@ export const getApplicationUsers = async (
     defaultValues: [],
   };
   const client = req.body.client as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
 
   // Get the list of all users.
   let query: QueryProps = {
@@ -32,10 +39,10 @@ export const getApplicationUsers = async (
   };
   let response = await client.PerformQuery(query);
   if (response.code !== 200 || response.rows.length === 0) {
-    res.status(400);
-    res.write(JSON.stringify({ message: "Could not get users." }));
-    next();
-    return;
+    return responseHelper.ErrorResponse(
+      ErrorStatusCode.BadRequest,
+      "Could not get users."
+    );
   }
   let users = response.rows;
 
@@ -47,10 +54,10 @@ export const getApplicationUsers = async (
   };
   response = await client.PerformQuery(query);
   if (response.code !== 200 || response.rows.length === 0) {
-    res.status(400);
-    res.write(JSON.stringify({ message: "Could not get applications." }));
-    next();
-    return;
+    return responseHelper.ErrorResponse(
+      ErrorStatusCode.BadRequest,
+      "Could not get applications."
+    );
   }
   let apps = response.rows;
 
@@ -133,7 +140,7 @@ export const getApplicationUsers = async (
     });
   });
 
-  res.status(200).write(JSON.stringify(responseData));
+  responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, responseData);
 };
 
 /**
@@ -149,6 +156,7 @@ export const createApplicationUser = async (
   next: NextFunction
 ) => {
   const client = req.body.client as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
   const newElement = req.body.newElement as DefaultValues[];
 
   // Construct query to create the new application user.
@@ -181,11 +189,14 @@ export const createApplicationUser = async (
       isuser: newElement[2].value === "true",
       isadmin: newElement[3].value === "true",
     };
-    res.status(200).write(JSON.stringify({ newElement: newAppUser }));
+    responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
+      newElement: newAppUser,
+    });
   } else {
-    res
-      .status(500)
-      .write(JSON.stringify({ message: "Failed to create app user. " }));
+    responseHelper.ErrorResponse(
+      ErrorStatusCode.BadRequest,
+      "Failed to create app user."
+    );
   }
 };
 
@@ -202,6 +213,7 @@ export const updateApplicationUser = async (
   next: NextFunction
 ) => {
   const client = req.body.client as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
   var updateElement = req.body.updateElement as DefaultValues[];
 
   // Construct the query, filtering the given user and application for their
@@ -234,13 +246,14 @@ export const updateApplicationUser = async (
       isuser: updateElement[2].value.toString() === "true",
       isadmin: updateElement[3].value.toString() === "true",
     };
-    res.status(200).write(JSON.stringify({ updatedElement: updateAppUser }));
+    responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
+      updatedElement: updateAppUser,
+    });
   } else {
-    res
-      .status(500)
-      .write(
-        JSON.stringify({ message: "The application user failed to update." })
-      );
+    responseHelper.ErrorResponse(
+      ErrorStatusCode.BadRequest,
+      "The application user failed to update."
+    );
   }
 };
 
@@ -257,6 +270,7 @@ export const deleteApplicationUser = async (
   next: NextFunction
 ) => {
   const client = req.body.client as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
   var deleteElement = req.body.deleteElement as DefaultValues[];
 
   // Construct the query, replacing the user and application fields with their
@@ -280,5 +294,7 @@ export const deleteApplicationUser = async (
 
   // Send back the result of the operation.
   const response = await client.PerformQuery(query);
-  res.status(response.code);
+  responseHelper.GenericResponse(
+    response.code === 200 ? HttpStatusCode.Ok : HttpStatusCode.BadRequest
+  );
 };

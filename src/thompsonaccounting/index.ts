@@ -1,6 +1,12 @@
 import { Request, Response, NextFunction } from "express";
 import { v4 as uuidv4 } from "uuid";
 import { QueryProps, DatabaseConnection } from "../utils/database";
+import {
+  ErrorStatusCode,
+  HttpStatusCode,
+  ResponseHelper,
+  SuccessfulStatusCode,
+} from "../utils/response";
 import { capitalize, isNullOrWhiteSpace } from "../utils/string";
 import {
   capitalizeName,
@@ -53,14 +59,15 @@ export const getClientDetails = async (
   next: NextFunction
 ) => {
   const client = req.body.awsClient as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
 
   let schema = await getClientSchema(client.GetClient());
 
   if (schema === undefined) {
-    res.status(400);
-    res.write(JSON.stringify({ message: "Failed to get client schema. " }));
-    next();
-    return;
+    return responseHelper.ErrorResponse(
+      ErrorStatusCode.BadRequest,
+      "Failed to get client schema."
+    );
   }
 
   let tableNames = schema.tabs.map((tab) => tab.name);
@@ -84,10 +91,10 @@ export const getClientDetails = async (
 
   let response = await client.PerformFormattedQuery(sql);
   if (response.code !== 200 || response.rows.length === 0) {
-    res.status(400);
-    res.write(JSON.stringify({ message: "Failed to get clients." }));
-    next();
-    return;
+    return responseHelper.ErrorResponse(
+      ErrorStatusCode.BadRequest,
+      "Failed to get clients."
+    );
   }
 
   let allClientDetails: ClientDetails[] = [];
@@ -113,9 +120,7 @@ export const getClientDetails = async (
     allClientDetails.push(copy);
   }
 
-  res.status(200);
-  res.write(JSON.stringify(allClientDetails));
-  next();
+  responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, allClientDetails);
 };
 
 export const getNewClientSchema = async (
@@ -124,19 +129,18 @@ export const getNewClientSchema = async (
   next: NextFunction
 ) => {
   const client = req.body.awsClient as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
 
   let schema = await getClientSchema(client.GetClient());
 
   if (schema === undefined) {
-    res.status(400);
-    res.write(JSON.stringify({ message: "Failed to get client details." }));
-    next();
-    return;
+    return responseHelper.ErrorResponse(
+      ErrorStatusCode.BadRequest,
+      "Failed to get client details."
+    );
   }
 
-  res.status(200);
-  res.write(JSON.stringify(schema));
-  next();
+  responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, schema);
 };
 
 export const postNewClientDetails = async (
@@ -145,20 +149,17 @@ export const postNewClientDetails = async (
   next: NextFunction
 ) => {
   const client = req.body.awsClient as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
   const newClient = req.body.formData as ClientDetails;
 
   // Validate all required parameters are set.
   for (let tab of newClient.tabs) {
     for (let field of tab.fields) {
       if (field.required && (field.value === "" || field.value === "---")) {
-        res.status(400);
-        res.write(
-          JSON.stringify({
-            message: `The required parameter ${field.label} was not entered.`,
-          })
+        return responseHelper.ErrorResponse(
+          ErrorStatusCode.BadRequest,
+          `The required parameter ${field.label} was not entered.`
         );
-        next();
-        return;
       }
     }
   }
@@ -210,12 +211,10 @@ export const postNewClientDetails = async (
     let response = await client.PerformQuery(query);
     if (response.code !== 200) {
       await deleteInsertedEntries(client, insertedEntries);
-      res.status(500);
-      res.write(
-        JSON.stringify({ message: `Unable to insert into ${tabData.name}.` })
+      return responseHelper.ErrorResponse(
+        ErrorStatusCode.BadRequest,
+        `Unable to insert into ${tabData.name}`
       );
-      next();
-      return;
     }
 
     insertedEntries.push({
@@ -235,14 +234,13 @@ export const postNewClientDetails = async (
   let response = await client.PerformQuery(query);
   if (response.code !== 200) {
     await deleteInsertedEntries(client, insertedEntries);
-    res.status(500);
-    res.write(JSON.stringify({ message: "Unable to insert into clients." }));
-    next();
-    return;
+    return responseHelper.ErrorResponse(
+      ErrorStatusCode.BadRequest,
+      "Unable to insert into clients."
+    );
   }
 
-  res.status(200);
-  next();
+  responseHelper.GenericResponse(HttpStatusCode.Ok);
 };
 
 export const updateClientDetails = async (
@@ -251,20 +249,17 @@ export const updateClientDetails = async (
   next: NextFunction
 ) => {
   const client = req.body.awsClient as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
   const clientDetails = req.body.clientDetails as ClientDetails;
 
   // Validate all required parameters are set.
   for (let tab of clientDetails.tabs) {
     for (let field of tab.fields) {
       if (field.required && (field.value === "" || field.value === "---")) {
-        res.status(400);
-        res.write(
-          JSON.stringify({
-            message: `The required parameter ${field.label} was not entered.`,
-          })
+        return responseHelper.ErrorResponse(
+          ErrorStatusCode.BadRequest,
+          `The required parameter ${field.label} was not entered.`
         );
-        next();
-        return;
       }
     }
   }
@@ -276,10 +271,10 @@ export const updateClientDetails = async (
   };
   let response = await client.PerformQuery(query);
   if (response.code !== 200) {
-    res.status(400);
-    res.write(JSON.stringify({ message: "Failed to get client entries." }));
-    next();
-    return;
+    return responseHelper.ErrorResponse(
+      ErrorStatusCode.BadRequest,
+      "Failed to get client entries."
+    );
   }
   let entries = response.rows[0];
 
@@ -331,14 +326,10 @@ export const updateClientDetails = async (
       };
       let response = await client.PerformQuery(query);
       if (response.code !== 200) {
-        res.status(400);
-        res.write(
-          JSON.stringify({
-            message: `Failed to update values for ${tabData.name}`,
-          })
+        return responseHelper.ErrorResponse(
+          ErrorStatusCode.BadRequest,
+          `Failed to update values for ${tabData.name}`
         );
-        next();
-        return;
       }
     } else {
       // Create a new id for the entry.
@@ -352,12 +343,10 @@ export const updateClientDetails = async (
       };
       let response = await client.PerformQuery(query);
       if (response.code !== 200) {
-        res.status(400);
-        res.write(
-          JSON.stringify({ message: `Unable to insert into ${tabData.name}.` })
+        return responseHelper.ErrorResponse(
+          ErrorStatusCode.BadRequest,
+          `Unable to insert into ${tabData.name}`
         );
-        next();
-        return;
       }
 
       query = {
@@ -370,20 +359,15 @@ export const updateClientDetails = async (
         deleteInsertedEntries(client, [
           { tableName: tabData.name, id: entryId },
         ]);
-        res.status(400);
-        res.write(
-          JSON.stringify({
-            message: `Couldn't relate ${tabData.name} entry to clients.`,
-          })
+        return responseHelper.ErrorResponse(
+          ErrorStatusCode.BadRequest,
+          `Couldn't relate ${tabData.name} entry to clients.`
         );
-        next();
-        return;
       }
     }
   }
 
-  res.status(200);
-  next();
+  responseHelper.GenericResponse(HttpStatusCode.Ok);
 };
 
 export const deleteClient = async (
@@ -392,6 +376,7 @@ export const deleteClient = async (
   next: NextFunction
 ) => {
   const client = req.body.awsClient as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
   const clientId = req.body.clientId;
 
   let query: QueryProps = {
@@ -401,12 +386,10 @@ export const deleteClient = async (
   };
   let response = await client.PerformQuery(query);
   if (response.code !== 200 || response.rows.length === 0) {
-    res.status(400);
-    res.write(
-      JSON.stringify({ message: "Failed to get the client's details." })
+    return responseHelper.ErrorResponse(
+      ErrorStatusCode.BadRequest,
+      "Failed to get the client's details."
     );
-    next();
-    return;
   }
 
   query = {
@@ -416,12 +399,10 @@ export const deleteClient = async (
   };
   response = await client.PerformQuery(query);
   if (response.code !== 200 || response.rows.length === 0) {
-    res.status(400);
-    res.write(
-      JSON.stringify({ message: "Failed to delete the client details." })
+    return responseHelper.ErrorResponse(
+      ErrorStatusCode.BadRequest,
+      "Failed to delete the client details."
     );
-    next();
-    return;
   }
 
   for (const [tableName, id] of Object.entries(response.rows[0])) {
@@ -433,17 +414,14 @@ export const deleteClient = async (
     let sql = format(sqlString, tableName, id);
     let response = await client.PerformFormattedQuery(sql);
     if (response.code !== 200 || response.rows.length === 0) {
-      res.status(400);
-      res.write(
-        JSON.stringify({ message: "Failed to delete the client details." })
+      return responseHelper.ErrorResponse(
+        ErrorStatusCode.BadRequest,
+        "Failed to delete the client details."
       );
-      next();
-      return;
     }
   }
 
-  res.status(200);
-  next();
+  responseHelper.GenericResponse(HttpStatusCode.Ok);
 };
 
 export const getAllTabs = async (
@@ -452,14 +430,15 @@ export const getAllTabs = async (
   next: NextFunction
 ) => {
   const client = req.body.awsClient as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
 
   // Get all column names other than the id field.
   let tableNames = await getTableSchema(client.GetClient(), "clients");
   let tabNames = tableNames.map((name) => capitalizeName(name.column_name));
 
-  res.status(200);
-  res.write(JSON.stringify({ tabs: tabNames }));
-  next();
+  responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
+    tabs: tabNames,
+  });
 };
 
 export const createTab = async (
@@ -468,6 +447,7 @@ export const createTab = async (
   next: NextFunction
 ) => {
   const client = req.body.awsClient as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
   const tabName = createTabName(req.body.tabName);
   const tabNameKey = `${tabName}_id`;
 
@@ -479,10 +459,10 @@ export const createTab = async (
   };
   let response = await client.PerformQuery(query);
   if (response.code !== 200) {
-    res.status(400);
-    res.write(JSON.stringify({ message: `Could not create tab ${tabName}.` }));
-    next();
-    return;
+    return responseHelper.ErrorResponse(
+      ErrorStatusCode.BadRequest,
+      `Could not create tab ${tabName}.`
+    );
   }
 
   query = {
@@ -492,18 +472,13 @@ export const createTab = async (
   };
   response = await client.PerformQuery(query);
   if (response.code !== 200) {
-    res.status(400);
-    res.write(
-      JSON.stringify({
-        message: `Could not add the tab ${tabName} to clients.`,
-      })
+    return responseHelper.ErrorResponse(
+      ErrorStatusCode.BadRequest,
+      `Could not add the tab ${tabName} to clients.`
     );
-    next();
-    return;
   }
 
-  res.status(200);
-  next();
+  responseHelper.GenericResponse(HttpStatusCode.Ok);
 };
 
 export const updateTabName = async (
@@ -512,20 +487,17 @@ export const updateTabName = async (
   next: NextFunction
 ) => {
   const client = req.body.awsClient as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
   const currentName = createTabName(req.body.currentName);
   const newName = createTabName(req.body.newName);
 
   let sql = format("ALTER TABLE %I RENAME TO %s;", currentName, newName);
   let response = await client.PerformFormattedQuery(sql);
   if (response.code !== 200) {
-    res.status(400);
-    res.write(
-      JSON.stringify({
-        message: `Failed to rename table ${currentName} to ${newName}`,
-      })
+    return responseHelper.ErrorResponse(
+      ErrorStatusCode.BadRequest,
+      `Failed to rename table ${currentName} to ${newName}`
     );
-    next();
-    return;
   }
 
   // ALTER TABLE ${newName} RENAME CONSTRAINT ${currentName}_pkey TO ${newName}_pkey;
@@ -533,14 +505,10 @@ export const updateTabName = async (
   sql = format(sqlString, newName);
   response = await client.PerformFormattedQuery(sql);
   if (response.code !== 200) {
-    res.status(400);
-    res.write(
-      JSON.stringify({
-        message: `Failed to rename table ${newName} constraint`,
-      })
+    return responseHelper.ErrorResponse(
+      ErrorStatusCode.BadRequest,
+      `Failed to rename table ${newName} constraint.`
     );
-    next();
-    return;
   }
 
   // ALTER TABLE ${newName} RENAME COLUMN ${currentName)_id TO ${newName}_id;
@@ -548,14 +516,10 @@ export const updateTabName = async (
   sql = format(sqlString, newName);
   response = await client.PerformFormattedQuery(sql);
   if (response.code !== 200) {
-    res.status(400);
-    res.write(
-      JSON.stringify({
-        message: `Failed to update column name ${currentName}_id in table ${newName}`,
-      })
+    return responseHelper.ErrorResponse(
+      ErrorStatusCode.BadRequest,
+      `Failed to update column name ${currentName}_id in table ${newName}`
     );
-    next();
-    return;
   }
 
   // ALTER TABLE clients RENAME COLUMN ${currentName} TO ${newName};
@@ -563,14 +527,10 @@ export const updateTabName = async (
   sql = format(sqlString, currentName, newName);
   response = await client.PerformFormattedQuery(sql);
   if (response.code !== 200) {
-    res.status(400);
-    res.write(
-      JSON.stringify({
-        message: `Failed to rename column ${currentName} in clients;`,
-      })
+    return responseHelper.ErrorResponse(
+      ErrorStatusCode.BadRequest,
+      `Failed to rename column ${currentName} in clients`
     );
-    next();
-    return;
   }
 
   sqlString =
@@ -578,14 +538,10 @@ export const updateTabName = async (
   sql = format(sqlString, newName, currentName);
   response = await client.PerformFormattedQuery(sql);
   if (response.code !== 200 || response.rows.length === 0) {
-    res.status(400);
-    res.write(
-      JSON.stringify({
-        message: `Failed to update field metadata for fields in ${currentName}`,
-      })
+    return responseHelper.ErrorResponse(
+      ErrorStatusCode.BadRequest,
+      `Failed to update field metadata for fields in ${currentName}`
     );
-    next();
-    return;
   }
 
   // Need to now rename all fields in that table, as their hash will be different now.
@@ -602,10 +558,10 @@ export const updateTabName = async (
     sql = format(sqlString, newName, oldFieldName, newFieldName);
     response = await client.PerformFormattedQuery(sql);
     if (response.code !== 200) {
-      res.status(400);
-      res.write(JSON.stringify({ message: "Failed to rename column" }));
-      next();
-      return;
+      return responseHelper.ErrorResponse(
+        ErrorStatusCode.BadRequest,
+        "Failed to rename column"
+      );
     }
 
     sqlString =
@@ -613,17 +569,14 @@ export const updateTabName = async (
     sql = format(sqlString, newFieldName, oldFieldName);
     response = await client.PerformFormattedQuery(sql);
     if (response.code !== 200) {
-      res.status(400);
-      res.write(
-        JSON.stringify({ message: "Failed to rename metadata column" })
+      return responseHelper.ErrorResponse(
+        ErrorStatusCode.BadRequest,
+        "Failed to rename metadata column"
       );
-      next();
-      return;
     }
   }
 
-  res.status(200);
-  next();
+  responseHelper.GenericResponse(HttpStatusCode.Ok);
 };
 
 export const deleteTab = async (
@@ -632,6 +585,7 @@ export const deleteTab = async (
   next: NextFunction
 ) => {
   const client = req.body.awsClient as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
   const tabName = createTabName(req.body.tabName);
 
   let query: QueryProps = {
@@ -641,14 +595,10 @@ export const deleteTab = async (
   };
   let response = await client.PerformQuery(query);
   if (response.code !== 200) {
-    res.status(400);
-    res.write(
-      JSON.stringify({
-        message: `Failed to delete column ${tabName} from clients.`,
-      })
+    return responseHelper.ErrorResponse(
+      ErrorStatusCode.BadRequest,
+      `Failed to delete column ${tabName} from clients.`
     );
-    next();
-    return;
   }
 
   query = {
@@ -658,10 +608,10 @@ export const deleteTab = async (
   };
   response = await client.PerformQuery(query);
   if (response.code !== 200) {
-    res.status(400);
-    res.write(JSON.stringify({ message: `Failed to drop table ${tabName}` }));
-    next();
-    return;
+    return responseHelper.ErrorResponse(
+      ErrorStatusCode.BadRequest,
+      `Failed to drop table ${tabName}`
+    );
   }
 
   // Delete all metadata associated with the tab.
@@ -672,18 +622,13 @@ export const deleteTab = async (
   };
   response = await client.PerformQuery(query);
   if (response.code !== 200) {
-    res.status(400);
-    res.write(
-      JSON.stringify({
-        message: `Failed to delete metadata for tab ${tabName}`,
-      })
+    return responseHelper.ErrorResponse(
+      ErrorStatusCode.BadRequest,
+      `Failed to delete metadata for tab ${tabName}`
     );
-    next();
-    return;
   }
 
-  res.status(200);
-  next();
+  responseHelper.GenericResponse(HttpStatusCode.Ok);
 };
 
 export const getAllFields = async (
@@ -692,6 +637,7 @@ export const getAllFields = async (
   next: NextFunction
 ) => {
   const client = req.body.awsClient as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
 
   let tableNames = await getTableSchema(client.GetClient(), "clients");
   let allFieldNames: string[] = [];
@@ -706,9 +652,9 @@ export const getAllFields = async (
     );
   }
 
-  res.status(200);
-  res.write(JSON.stringify({ fields: allFieldNames }));
-  next();
+  responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
+    fields: allFieldNames,
+  });
 };
 
 export const getFieldsForTab = async (
@@ -717,6 +663,7 @@ export const getFieldsForTab = async (
   next: NextFunction
 ) => {
   const client = req.body.awsClient as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
   const tabName = createTabName(req.query.tabName as string);
 
   let fieldNames = await getTableSchema(client.GetClient(), tabName);
@@ -724,9 +671,9 @@ export const getFieldsForTab = async (
     capitalizeName(name.column_name)
   );
 
-  res.status(200);
-  res.write(JSON.stringify({ fieldNames: fieldStringNames }));
-  next();
+  responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
+    fieldNames: fieldStringNames,
+  });
 };
 
 export const getFieldSchema = async (
@@ -735,6 +682,7 @@ export const getFieldSchema = async (
   next: NextFunction
 ) => {
   const client = req.body.awsClient as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
   const tabName = createTabName(req.query.tabName as string);
   let fieldName = createTabName(req.query.fieldName as string);
 
@@ -742,10 +690,7 @@ export const getFieldSchema = async (
   try {
     rows = await getTableSchema(client.GetClient(), tabName);
   } catch (e: any) {
-    res.status(400);
-    res.write(JSON.stringify({ message: e.message }));
-    next();
-    return;
+    return responseHelper.ErrorResponse(ErrorStatusCode.BadRequest, e.message);
   }
 
   let metadata;
@@ -755,10 +700,7 @@ export const getFieldSchema = async (
       createFieldName(tabName, fieldName)
     );
   } catch (e: any) {
-    res.status(400);
-    res.write(JSON.stringify({ message: e.message }));
-    next();
-    return;
+    return responseHelper.ErrorResponse(ErrorStatusCode.BadRequest, e.message);
   }
 
   let field = rows.filter((data) => data.column_name === fieldName)[0];
@@ -806,9 +748,9 @@ export const getFieldSchema = async (
     options: options,
   };
 
-  res.status(200);
-  res.write(JSON.stringify({ fieldSchema: fieldSchema }));
-  next();
+  responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
+    fieldSchema: fieldSchema,
+  });
 };
 
 export const getFieldsMetadata = async (
@@ -817,16 +759,17 @@ export const getFieldsMetadata = async (
   next: NextFunction
 ) => {
   const client = req.body.awsClient as DatabaseConnection;
+  const responseHelper = req.body.resopnse as ResponseHelper;
   const tabName = createTabName(req.query.tabName as string);
 
   let metadata: FieldMetadata[] = [];
   try {
     metadata = await getFieldMetadataForTab(client.GetClient(), tabName);
   } catch (e: any) {
-    res.status(400);
-    res.write(JSON.stringify({ message: e.message }));
-    next();
-    return;
+    return responseHelper.SuccessfulResponse(
+      SuccessfulStatusCode.Ok,
+      e.message
+    );
   }
 
   metadata = metadata.map((data) => {
@@ -837,9 +780,7 @@ export const getFieldsMetadata = async (
     };
   });
 
-  res.status(200);
-  res.write(JSON.stringify(metadata));
-  next();
+  responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, metadata);
 };
 
 export const reorderFields = async (
@@ -848,6 +789,7 @@ export const reorderFields = async (
   next: NextFunction
 ) => {
   const client = req.body.awsClient as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
   const fieldMetadata = req.body.fieldMetadata as FieldMetadata[];
 
   for (let metadata of fieldMetadata) {
@@ -862,19 +804,14 @@ export const reorderFields = async (
     };
     const response = await client.PerformQuery(query);
     if (response.code !== 200 || response.rows.length === 0) {
-      res.status(400);
-      res.write(
-        JSON.stringify({
-          message: `Couldn't update metadata for field ${metadata.field_name}`,
-        })
+      responseHelper.ErrorResponse(
+        ErrorStatusCode.BadRequest,
+        `Couldn't update metadata for field ${metadata.field_name}`
       );
-      next();
-      return;
     }
   }
 
-  res.status(200);
-  next();
+  responseHelper.GenericResponse(HttpStatusCode.Ok);
 };
 
 export const createField = async (
@@ -883,30 +820,29 @@ export const createField = async (
   next: NextFunction
 ) => {
   const client = req.body.awsClient as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
   const tabName = req.body.tabName.toLowerCase() as string;
   const fieldData = req.body.fieldData as DatabaseColumn;
 
   if (isNullOrWhiteSpace(tabName)) {
-    res.status(400);
-    res.write(
-      JSON.stringify({ message: "You must provide a tab to add to." })
+    return responseHelper.ErrorResponse(
+      ErrorStatusCode.BadRequest,
+      "You must provide a tab to add to."
     );
   }
 
   if (isNullOrWhiteSpace(fieldData.name)) {
-    res.status(400);
-    res.write(JSON.stringify({ message: "You must provide a field name." }));
-    next();
-    return;
+    return responseHelper.ErrorResponse(
+      ErrorStatusCode.BadRequest,
+      "You must provide a field name."
+    );
   }
 
   if (fieldData.type === "select" && !fieldData.options) {
-    res.status(400);
-    res.write(
-      JSON.stringify({ message: "You must provide values for a dropdown." })
+    return responseHelper.ErrorResponse(
+      ErrorStatusCode.BadRequest,
+      "You must provide values for a dropdown."
     );
-    next();
-    return;
   }
 
   const tabId = createTabName(tabName);
@@ -926,12 +862,10 @@ export const createField = async (
     };
     let response = await client.PerformQuery(enumQuery);
     if (response.code !== 200) {
-      res.status(400);
-      res.write(
-        JSON.stringify({ message: `Failed to create the enum ${enumName}` })
+      return responseHelper.ErrorResponse(
+        ErrorStatusCode.BadRequest,
+        `Failed to create the enum ${enumName}`
       );
-      next();
-      return;
     }
   }
 
@@ -968,14 +902,10 @@ export const createField = async (
   };
   let response = await client.PerformQuery(query);
   if (response.code !== 200) {
-    res.status(400);
-    res.write(
-      JSON.stringify({
-        message: `Failed to add the field ${fieldData.name} to tab ${tabName}`,
-      })
+    return responseHelper.ErrorResponse(
+      ErrorStatusCode.BadRequest,
+      `Failed to add the field ${fieldData.name} to tab ${tabName}`
     );
-    next();
-    return;
   }
 
   // Add a column to the field metadata.
@@ -990,18 +920,13 @@ export const createField = async (
   };
   response = await client.PerformQuery(query);
   if (response.code !== 200) {
-    res.status(400);
-    res.write(
-      JSON.stringify({
-        message: `Failed to create metadata for field ${fieldData.label}`,
-      })
+    return responseHelper.ErrorResponse(
+      ErrorStatusCode.BadRequest,
+      `Failed to create metadata for field ${fieldData.label}`
     );
-    next();
-    return;
   }
 
-  res.status(200);
-  next();
+  responseHelper.GenericResponse(HttpStatusCode.Ok);
 };
 
 export const updateField = async (
@@ -1010,6 +935,7 @@ export const updateField = async (
   next: NextFunction
 ) => {
   const client = req.body.awsClient as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
   const tabName: string = createTabName(req.body.tabName);
   const fieldName: string = createFieldName(tabName, req.body.fieldName);
   const fieldValues: DatabaseColumn = req.body.fieldValues;
@@ -1027,14 +953,10 @@ export const updateField = async (
     };
     let response = await client.PerformQuery(query);
     if (response.code !== 200) {
-      res.status(400);
-      res.write(
-        JSON.stringify({
-          message: `Failed to rename the column ${fieldName}.`,
-        })
+      return responseHelper.ErrorResponse(
+        ErrorStatusCode.BadRequest,
+        `Failed to rename the column ${fieldName}`
       );
-      next();
-      return;
     }
 
     query = {
@@ -1044,12 +966,10 @@ export const updateField = async (
     };
     response = await client.PerformQuery(query);
     if (response.code !== 200 || response.rows.length === 0) {
-      res.status(400);
-      res.write(
-        JSON.stringify({ message: "Couldn't update field metadata name." })
+      return responseHelper.ErrorResponse(
+        ErrorStatusCode.BadRequest,
+        "Couldn't update field metadata name."
       );
-      next();
-      return;
     }
   }
 
@@ -1070,14 +990,10 @@ export const updateField = async (
 
   let response = await client.PerformQuery(query);
   if (response.code !== 200) {
-    res.status(400);
-    res.write(
-      JSON.stringify({
-        message: `Failed to update required status for column ${newFieldName}`,
-      })
+    return responseHelper.ErrorResponse(
+      ErrorStatusCode.BadRequest,
+      `Failed to update required status for column ${newFieldName}`
     );
-    next();
-    return;
   }
 
   // If it is a dropdown, update the values if any have changed.
@@ -1091,12 +1007,10 @@ export const updateField = async (
       };
       let response = await client.PerformQuery(query);
       if (response.code !== 200) {
-        res.status(400);
-        res.write(
-          JSON.stringify({ message: `Failed to rename the enum ${fieldName}` })
+        return responseHelper.ErrorResponse(
+          ErrorStatusCode.BadRequest,
+          `Failed to rename the enum ${fieldName}`
         );
-        next();
-        return;
       }
     }
 
@@ -1108,21 +1022,17 @@ export const updateField = async (
     };
     response = await client.PerformQuery(query);
     if (response.code !== 200) {
-      res.status(404);
-      res.write(
-        JSON.stringify({ message: "User defined enum not found in database." })
+      return responseHelper.ErrorResponse(
+        ErrorStatusCode.BadRequest,
+        `User defined enum not found in database.`
       );
-      next();
-      return;
     }
 
     let options = response.rows.map((row) => row.unnest);
 
     // If there are no values or no new values, don't do anything.
     if (!fieldValues.options || options.length >= fieldValues.options.length) {
-      res.status(200);
-      next();
-      return;
+      return responseHelper.GenericResponse(HttpStatusCode.Ok);
     }
 
     fieldValues.options.splice(0, 1);
@@ -1137,20 +1047,15 @@ export const updateField = async (
       );
       response = await client.PerformFormattedQuery(sql);
       if (response.code !== 200) {
-        res.status(400);
-        res.write(
-          JSON.stringify({
-            message: `Couldn't add the value ${fieldValues.options[i]} to the enum ${newFieldName}`,
-          })
+        return responseHelper.ErrorResponse(
+          ErrorStatusCode.BadRequest,
+          `Couldn't add the value ${fieldValues.options[i]} to the enum ${newFieldName}`
         );
-        next();
-        return;
       }
     }
   }
 
-  res.status(200);
-  next();
+  responseHelper.GenericResponse(HttpStatusCode.Ok);
 };
 
 export const deleteField = async (
@@ -1159,6 +1064,7 @@ export const deleteField = async (
   next: NextFunction
 ) => {
   const client = req.body.awsClient as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
 
   const tabName = createTabName(req.body.tabName);
   const fieldName = createFieldName(tabName, req.body.fieldName);
@@ -1170,12 +1076,10 @@ export const deleteField = async (
   };
   let response = await client.PerformQuery(query);
   if (response.code !== 200) {
-    res.status(400);
-    res.write(
-      JSON.stringify({ message: `Failed to delete the field ${fieldName}` })
+    return responseHelper.ErrorResponse(
+      ErrorStatusCode.BadRequest,
+      `Failed to delete the field ${fieldName}`
     );
-    next();
-    return;
   }
 
   // Delete the metadata for that field.
@@ -1186,16 +1090,11 @@ export const deleteField = async (
   };
   response = await client.PerformQuery(query);
   if (response.code !== 200) {
-    res.status(400);
-    res.write(
-      JSON.stringify({
-        message: `Failed to delete metadata for field ${fieldName}`,
-      })
+    return responseHelper.ErrorResponse(
+      ErrorStatusCode.BadRequest,
+      `Failed to delete metadata for field ${fieldName}`
     );
-    next();
-    return;
   }
 
-  res.status(200);
-  next();
+  responseHelper.GenericResponse(HttpStatusCode.Ok);
 };

@@ -1,6 +1,11 @@
 import { Request, Response, NextFunction } from "express";
 import { v4 as uuidv4 } from "uuid";
 import { AdminGetResponseData, DefaultValues } from "../../types";
+import {
+  HttpStatusCode,
+  ResponseHelper,
+  SuccessfulStatusCode,
+} from "../../utils/response";
 import { ReturnApp } from "./types";
 
 export const mockGetApplications = async (
@@ -15,6 +20,8 @@ export const mockGetApplications = async (
     newFields: [],
     defaultValues: [],
   };
+
+  const responseHelper = req.body.response as ResponseHelper;
 
   // Generate a random set of applications.
   responseData.elements = [
@@ -63,7 +70,7 @@ export const mockGetApplications = async (
     });
   });
 
-  res.status(200).write(JSON.stringify(responseData));
+  responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, responseData);
 };
 
 export const mockCreateApplication = async (
@@ -71,6 +78,7 @@ export const mockCreateApplication = async (
   res: Response,
   next: NextFunction
 ) => {
+  const responseHelper = req.body.response as ResponseHelper;
   const newElement = req.body.newElement as DefaultValues[];
   let newAppId = uuidv4();
 
@@ -79,7 +87,9 @@ export const mockCreateApplication = async (
     applicationname: newElement[1].value.toString(),
     redirecturl: newElement[2].value.toString(),
   };
-  res.status(200).write(JSON.stringify({ newElement: newApp }));
+  responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
+    newElement: newApp,
+  });
 };
 
 export const mockUpdateApplication = async (
@@ -87,6 +97,7 @@ export const mockUpdateApplication = async (
   res: Response,
   next: NextFunction
 ) => {
+  const responseHelper = req.body.response as ResponseHelper;
   const updateElement = req.body.updateElement as DefaultValues[];
 
   let udpatedApp: ReturnApp = {
@@ -94,7 +105,10 @@ export const mockUpdateApplication = async (
     applicationname: updateElement[1].value.toString(),
     redirecturl: updateElement[2].value.toString(),
   };
-  res.status(200).write(JSON.stringify({ updatedElement: udpatedApp }));
+  responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
+    updateElement,
+    udpatedApp,
+  });
 };
 
 export const mockDeleteApplication = async (
@@ -102,5 +116,6 @@ export const mockDeleteApplication = async (
   res: Response,
   next: NextFunction
 ) => {
-  res.status(200);
+  const responseHelper = req.body.response as ResponseHelper;
+  responseHelper.GenericResponse(HttpStatusCode.Ok);
 };

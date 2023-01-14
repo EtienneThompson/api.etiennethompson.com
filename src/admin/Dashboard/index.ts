@@ -1,5 +1,10 @@
 import { Request, Response, NextFunction } from "express";
 import { QueryProps, DatabaseConnection } from "../../utils/database";
+import {
+  ErrorStatusCode,
+  ResponseHelper,
+  SuccessfulStatusCode,
+} from "../../utils/response";
 import { TableNames, TableCount, CountData } from "./types";
 
 /**
@@ -15,6 +20,7 @@ export const getTableCounts = async (
   next: NextFunction
 ): Promise<void> => {
   const client = req.body.client as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
   // Query for all database table names in the database.
   let query: QueryProps = {
     name: "getTableNames",
@@ -23,9 +29,10 @@ export const getTableCounts = async (
   };
   let response = await client.PerformQuery(query);
   if (response.code != 200) {
-    res.status(404);
-    next();
-    return;
+    return responseHelper.ErrorResponse(
+      ErrorStatusCode.BadRequest,
+      "Could not get dashboard data."
+    );
   }
 
   let tables: TableNames[] = response.rows;
@@ -52,6 +59,5 @@ export const getTableCounts = async (
   }
   data.total = total;
 
-  res.status(200).write(JSON.stringify(data));
-  next();
+  responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, data);
 };

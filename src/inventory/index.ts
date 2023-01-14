@@ -14,6 +14,12 @@ import {
   ItemElement,
 } from "./types";
 import { QueryResponse } from "../types";
+import {
+  ErrorStatusCode,
+  HttpStatusCode,
+  ResponseHelper,
+  SuccessfulStatusCode,
+} from "../utils/response";
 
 /**
  * Gets breadcrumb data for an item in the database.
@@ -270,17 +276,14 @@ export const getBaseFolder = async (
   next: NextFunction
 ): Promise<void> => {
   const client = req.body.client as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
   let params = req.query;
   let userid = await client.GetUserId(params.clientid as string);
   if (!userid) {
-    res.status(400);
-    res.write(
-      JSON.stringify({
-        message: "Could not get a user id for that client id.",
-      })
+    return responseHelper.ErrorResponse(
+      ErrorStatusCode.BadRequest,
+      "Could not get a user id for that client id."
     );
-    next();
-    return;
   }
   // Get the folder where the parent_folder is null, which is the base folder
   // of the inventory system for that user.
@@ -291,17 +294,16 @@ export const getBaseFolder = async (
   };
   const response = await client.PerformQuery(query);
   if (response.code !== 200) {
-    // The user's inventory system has not been initialized.
-    res.status(404);
-    res.write(JSON.stringify({ message: "You have no root folder." }));
-    next();
-    return;
+    return responseHelper.ErrorResponse(
+      ErrorStatusCode.NotFound,
+      "You have no root folder."
+    );
   }
 
   let folderInfo = response.rows[0] as FolderElement;
-  res.status(200);
-  res.write(JSON.stringify({ folder: folderInfo }));
-  next();
+  responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
+    folder: folderInfo,
+  });
 };
 
 /**
@@ -317,17 +319,14 @@ export const getFolder = async (
   next: NextFunction
 ): Promise<void> => {
   const client = req.body.client as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
   let params = req.query;
   let userid = await client.GetUserId(params.clientid as string);
   if (!userid) {
-    res.status(400);
-    res.write(
-      JSON.stringify({
-        message: "Could not get a user id for that client id.",
-      })
+    return responseHelper.ErrorResponse(
+      ErrorStatusCode.BadRequest,
+      "Could not get a user id for that client id."
     );
-    next();
-    return;
   }
   let folderid = params.folderid as string;
   let query: QueryProps = {
@@ -338,10 +337,10 @@ export const getFolder = async (
   let response = await client.PerformQuery(query);
 
   if (response.code !== 200) {
-    res.status(404);
-    res.write(JSON.stringify({ message: "That folder was not found." }));
-    next();
-    return;
+    return responseHelper.ErrorResponse(
+      ErrorStatusCode.NotFound,
+      "That folder was not found."
+    );
   }
   let folderInfo = response.rows[0] as FolderElement;
 
@@ -358,9 +357,10 @@ export const getFolder = async (
     folderInfo.updated = createReadableTimeField(new Date(folderInfo.updated));
   }
 
-  res.status(200);
-  res.write(JSON.stringify({ folder: folderInfo, breadcrumb: breadcrumb }));
-  next();
+  responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
+    folder: folderInfo,
+    breadcrumb: breadcrumb,
+  });
 };
 
 /**
@@ -376,17 +376,14 @@ export const getItem = async (
   next: NextFunction
 ): Promise<void> => {
   const client = req.body.client as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
   let params = req.query;
   let userid = await client.GetUserId(params.clientid as string);
   if (!userid) {
-    res.status(400);
-    res.write(
-      JSON.stringify({
-        message: "Could not get a user id for that client id.",
-      })
+    return responseHelper.ErrorResponse(
+      ErrorStatusCode.BadRequest,
+      "Could not get a user id for that client id."
     );
-    next();
-    return;
   }
   let itemid = params.itemid as string;
   let query: QueryProps = {
@@ -397,10 +394,10 @@ export const getItem = async (
   let response = await client.PerformQuery(query);
 
   if (response.code !== 200) {
-    res.status(404);
-    res.write(JSON.stringify({ message: "That item was not found." }));
-    next();
-    return;
+    return responseHelper.ErrorResponse(
+      ErrorStatusCode.NotFound,
+      "That item was not found."
+    );
   }
 
   let breadcrumb = await getItemBreadcrumb(client, userid, itemid);
@@ -416,9 +413,10 @@ export const getItem = async (
     itemInfo.updated = createReadableTimeField(new Date(itemInfo.updated));
   }
 
-  res.status(200);
-  res.write(JSON.stringify({ item: itemInfo, breadcrumb: breadcrumb }));
-  next();
+  responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
+    item: itemInfo,
+    breadcrumb: breadcrumb,
+  });
 };
 
 /**
@@ -433,26 +431,22 @@ export const getFolderChildren = async (
   next: NextFunction
 ) => {
   const client = req.body.client as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
   let clientid = req.query.clientid as string;
   let folderid = req.query.folderid as string;
   let userid = await client.GetUserId(clientid);
 
   if (!userid) {
-    res.status(400);
-    res.write(
-      JSON.stringify({
-        message: "Could not get a user id for that client id.",
-      })
+    return responseHelper.ErrorResponse(
+      ErrorStatusCode.BadRequest,
+      "Could not get a user id for that client id."
     );
-    next();
-    return;
   }
 
   let children = await getChildren(client, userid, folderid);
-
-  res.status(200);
-  res.write(JSON.stringify({ children: children }));
-  next();
+  responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
+    children: children,
+  });
 };
 
 /**
@@ -468,20 +462,17 @@ export const createFolder = async (
   next: NextFunction
 ) => {
   const client = req.body.client as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
   // insert into folders (folderid, name, description, owner, picture, parent_folder, created, updated) VALUES (...);
   const newFolder = req.body as CreateRequest;
   const clientid = req.body.clientid;
 
   let userid = await client.GetUserId(clientid);
   if (!userid) {
-    res.status(400);
-    res.write(
-      JSON.stringify({
-        message: "Could not get a user id for that client id.",
-      })
+    return responseHelper.ErrorResponse(
+      ErrorStatusCode.BadRequest,
+      "Could not get a user id for that client id."
     );
-    next();
-    return;
   }
   // Generate unique id and current time for the other fields of a folder.
   let newFolderId = uuidv4();
@@ -512,22 +503,20 @@ export const createFolder = async (
 
   // Send back the information required by the application for the created folder.
   if (response.code === 200) {
-    res.status(200);
-    res.write(
-      JSON.stringify({
-        createdElement: {
-          id: newFolderId,
-          name: newFolder.name,
-          picture: imageUrl,
-          type: "folder",
-        },
-      })
-    );
+    responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
+      createdElement: {
+        id: newFolderId,
+        name: newFolder.name,
+        picture: imageUrl,
+        type: ElementTypes.Folder,
+      },
+    });
   } else {
-    res.status(500);
-    res.write(JSON.stringify({ message: "Folder failed to be created." }));
+    responseHelper.ErrorResponse(
+      ErrorStatusCode.BadRequest,
+      "Folder failed to be created."
+    );
   }
-  next();
 };
 
 /**
@@ -543,20 +532,17 @@ export const createItem = async (
   next: NextFunction
 ) => {
   const client = req.body.client as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
   // insert into items (itemid, name, description, picture, owner, parent_folder, created, updated) VALUES (...);
   const newItem = req.body as CreateRequest;
   const clientid = req.body.clientid as string;
 
   let userid = await client.GetUserId(clientid);
   if (!userid) {
-    res.status(400);
-    res.write(
-      JSON.stringify({
-        message: "Could not get a user id for that client id.",
-      })
+    return responseHelper.ErrorResponse(
+      ErrorStatusCode.BadRequest,
+      "Could not get a user id for that client id."
     );
-    next();
-    return;
   }
   // Generate the unique id and current time for the other fields of the item.
   let newItemId = uuidv4();
@@ -587,20 +573,19 @@ export const createItem = async (
 
   // Return useful information to the front end to update it's UI.
   if (response.code === 200) {
-    res.status(200);
-    res.write(
-      JSON.stringify({
-        createdElement: {
-          id: newItemId,
-          name: newItem.name,
-          picture: imageUrl,
-          type: ElementTypes.Item,
-        },
-      })
-    );
+    responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
+      createdElement: {
+        id: newItemId,
+        name: newItem.name,
+        picture: imageUrl,
+        type: ElementTypes.Item,
+      },
+    });
   } else {
-    res.status(500);
-    res.write(JSON.stringify({ message: "Item failed to be created." }));
+    responseHelper.ErrorResponse(
+      ErrorStatusCode.BadRequest,
+      "Item failed to be created."
+    );
   }
   next();
 };
@@ -618,20 +603,17 @@ export const updateFolder = async (
   next: NextFunction
 ) => {
   const client = req.body.client as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
   const clientid: string = req.body.clientid;
   var reqBody = req.body;
 
   // Construct query to get the current image uploaded for a folder.
   let userid = await client.GetUserId(clientid);
   if (!userid) {
-    res.status(400);
-    res.write(
-      JSON.stringify({
-        message: "Could not get a user id for that client id.",
-      })
+    return responseHelper.ErrorResponse(
+      ErrorStatusCode.BadRequest,
+      "Could not get a user id for that client id."
     );
-    next();
-    return;
   }
   let currentPicture = await getImageUrl(
     client,
@@ -692,14 +674,17 @@ export const updateFolder = async (
   let returnImageUrl = updatedImageUrl ? updatedImageUrl : currentPicture;
 
   // Send the updated information back to the user that they don't already have.
-  res.status(response.code);
-  res.write(
-    JSON.stringify({
+  if (response.code !== 200) {
+    responseHelper.ErrorResponse(
+      ErrorStatusCode.BadRequest,
+      "Failed to update the folder."
+    );
+  } else {
+    responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
       picture: returnImageUrl,
       updated: createReadableTimeField(currentDate),
-    })
-  );
-  next();
+    });
+  }
 };
 
 /**
@@ -715,20 +700,17 @@ export const updateItem = async (
   next: NextFunction
 ) => {
   const client = req.body.client as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
   const clientid: string = req.body.clientid;
   var reqBody = req.body;
 
   // Get the current image url for the item.
   let userid = await client.GetUserId(clientid);
   if (!userid) {
-    res.status(400);
-    res.write(
-      JSON.stringify({
-        message: "Could not get a user id for that client id.",
-      })
+    return responseHelper.ErrorResponse(
+      ErrorStatusCode.BadRequest,
+      "Could not get a user id for that client id."
     );
-    next();
-    return;
   }
   let currentPicture = await getImageUrl(
     client,
@@ -788,14 +770,17 @@ export const updateItem = async (
   let returnImageUrl = updatedImageUrl ? updatedImageUrl : currentPicture;
 
   // Return information front end doesn't already have.
-  res.status(response.code);
-  res.write(
-    JSON.stringify({
+  if (response.code !== 200) {
+    responseHelper.ErrorResponse(
+      ErrorStatusCode.BadRequest,
+      "Could not update the item."
+    );
+  } else {
+    responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
       picture: returnImageUrl,
       updated: createReadableTimeField(currentDate),
-    })
-  );
-  next();
+    });
+  }
 };
 
 /**
@@ -810,20 +795,17 @@ export const deleteFolder = async (
   next: NextFunction
 ) => {
   const client = req.body.client as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
   const folderid: string = req.body.folderid;
   const clientid: string = req.body.clientid;
 
   // Get the current image url uploaded for the folder.
   let userid = await client.GetUserId(clientid);
   if (!userid) {
-    res.status(400);
-    res.write(
-      JSON.stringify({
-        message: "Could not get a user id for that client id.",
-      })
+    return responseHelper.ErrorResponse(
+      ErrorStatusCode.BadRequest,
+      "Could not get a user id for that client id."
     );
-    next();
-    return;
   }
   let currentPicture = await getImageUrl(
     client,
@@ -846,13 +828,15 @@ export const deleteFolder = async (
   }
 
   if (response.code === 200) {
-    res.status(200);
-    res.write(JSON.stringify({ message: "Folder was successfully deleted." }));
+    responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
+      message: "Folder was successfully deleted.",
+    });
   } else {
-    res.status(500);
-    res.write(JSON.stringify({ message: "Failed to delete folder." }));
+    responseHelper.ErrorResponse(
+      ErrorStatusCode.BadRequest,
+      "Failed to delete folder."
+    );
   }
-  next();
 };
 
 /**
@@ -867,20 +851,17 @@ export const deleteItem = async (
   next: NextFunction
 ) => {
   const client = req.body.client as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
   const itemid: string = req.body.itemid;
   const clientid: string = req.body.clientid;
 
   // Get the current image url uploaded for the item.
   let userid = await client.GetUserId(clientid);
   if (!userid) {
-    res.status(400);
-    res.write(
-      JSON.stringify({
-        message: "Could not get a user id for that client id.",
-      })
+    return responseHelper.ErrorResponse(
+      ErrorStatusCode.BadRequest,
+      "Could not get a user id for that client id."
     );
-    next();
-    return;
   }
   let currentPicture = await getImageUrl(
     client,
@@ -903,13 +884,15 @@ export const deleteItem = async (
   }
 
   if (response.code === 200) {
-    res.status(200);
-    res.write(JSON.stringify({ message: "Item was successfully deleted." }));
+    responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
+      message: "Item was successfully deleted.",
+    });
   } else {
-    res.status(500);
-    res.write(JSON.stringify({ message: "Failed to delete item." }));
+    responseHelper.ErrorResponse(
+      ErrorStatusCode.BadRequest,
+      "Failed to delete item."
+    );
   }
-  next();
 };
 
 /**
@@ -926,6 +909,7 @@ export const moveElement = async (
   next: NextFunction
 ) => {
   const client = req.body.client as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
   const moveToId: string = req.body.moveToId;
   const movingId: string = req.body.movingId;
   const movingType: string = req.body.movingType;
@@ -933,14 +917,10 @@ export const moveElement = async (
 
   let userid = await client.GetUserId(clientid);
   if (!userid) {
-    res.status(400);
-    res.write(
-      JSON.stringify({
-        message: "Could not get a user id for that client id.",
-      })
+    return responseHelper.ErrorResponse(
+      ErrorStatusCode.BadRequest,
+      "Could not get a user id for that client id."
     );
-    next();
-    return;
   }
   let query: QueryProps = { name: "", text: "", values: [] };
   // Construct the query for moving the item based on type.
@@ -959,6 +939,7 @@ export const moveElement = async (
   }
   let response = await client.PerformQuery(query);
 
-  res.status(response.code);
-  next();
+  responseHelper.GenericResponse(
+    response.code === 200 ? HttpStatusCode.Ok : HttpStatusCode.BadRequest
+  );
 };

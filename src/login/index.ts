@@ -9,6 +9,12 @@ import {
   createMinuteExpiration,
   getCurrentTimeField,
 } from "../utils/date";
+import {
+  ErrorStatusCode,
+  HttpStatusCode,
+  ResponseHelper,
+  SuccessfulStatusCode,
+} from "../utils/response";
 
 export const loginHandler = async (
   req: Request,
@@ -16,6 +22,7 @@ export const loginHandler = async (
   next: NextFunction
 ) => {
   const client = req.body.client as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
   var reqBody = req.body as LoginRequest;
 
   // Verify that the user exists and get the user's client id.
@@ -35,11 +42,10 @@ export const loginHandler = async (
     session_expiration = entry.session_expiration;
   } else {
     // No results, return an error message.
-    res
-      .status(404)
-      .write(JSON.stringify({ message: "That user doesn't exist" }));
-    next();
-    return;
+    return responseHelper.ErrorResponse(
+      ErrorStatusCode.NotFound,
+      "That user doesn't exist."
+    );
   }
 
   // Verify the application exists and get the redirect url for that application.
@@ -60,21 +66,17 @@ export const loginHandler = async (
       }
     }
     if (redirectUrl === "") {
-      res.status(404).write(
-        JSON.stringify({
-          message: "Could not find matching redirect url for given base.",
-        })
+      return responseHelper.ErrorResponse(
+        ErrorStatusCode.NotFound,
+        "Could not find matching redirect url for given base."
       );
-      next();
-      return;
     }
   } else {
     // No results, return an error message.
-    res
-      .status(404)
-      .write(JSON.stringify({ message: "That application doesn't exist." }));
-    next();
-    return;
+    return responseHelper.ErrorResponse(
+      ErrorStatusCode.NotFound,
+      "That application doesn't exist."
+    );
   }
 
   // Get the user, admin status for the given user for the given application.
@@ -87,13 +89,10 @@ export const loginHandler = async (
   let isUser: boolean = false;
   let isAdmin: boolean = false;
   if (response.code !== 200 || response.rows.length === 0) {
-    res.status(404).write(
-      JSON.stringify({
-        message: "That user is not a member of the given application.",
-      })
+    return responseHelper.ErrorResponse(
+      ErrorStatusCode.NotFound,
+      "That user is not a member of the given application."
     );
-    next();
-    return;
   } else {
     const appUsers = response.rows[0] as UserAdminStatus;
     isUser = appUsers.isuser;
@@ -114,11 +113,10 @@ export const loginHandler = async (
     };
     response = await client.PerformQuery(query);
     if (response.code !== 200 || response.rows.length === 0) {
-      res
-        .status(500)
-        .write(JSON.stringify({ message: "There was an unexpected error. " }));
-      next();
-      return;
+      return responseHelper.ErrorResponse(
+        ErrorStatusCode.BadRequest,
+        "There was an unexpected error."
+      );
     }
   } else {
     // Use the existing clientId.
@@ -130,23 +128,19 @@ export const loginHandler = async (
     };
     response = await client.PerformQuery(query);
     if (response.code != 200 || response.rows.length === 0) {
-      res
-        .status(500)
-        .write(JSON.stringify({ message: "There was an unexpected error. " }));
-      next();
-      return;
+      return responseHelper.ErrorResponse(
+        ErrorStatusCode.BadRequest,
+        "There was an unexpected error."
+      );
     }
   }
 
-  res.status(200).write(
-    JSON.stringify({
-      clientId: retClientId,
-      redirectUrl: redirectUrl,
-      isUser: isUser,
-      isAdmin: isAdmin,
-    })
-  );
-  next();
+  responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
+    clientId: retClientId,
+    redirectUrl: redirectUrl,
+    isUser: isUser,
+    isAdmin: isAdmin,
+  });
 };
 
 export const sendResetPasswordEmail = async (
@@ -155,6 +149,7 @@ export const sendResetPasswordEmail = async (
   next: NextFunction
 ) => {
   const client = req.body.client as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
   var email = req.body.email as string;
 
   // Lookup that the email entered is associated with an account.
@@ -165,12 +160,10 @@ export const sendResetPasswordEmail = async (
   };
   let response = await client.PerformQuery(query);
   if (response.code !== 200 || response.rows.length === 0) {
-    res.status(400);
-    res.write(
-      JSON.stringify({ message: "Couldn't find a user with that email" })
+    return responseHelper.ErrorResponse(
+      ErrorStatusCode.BadRequest,
+      "Couldn't find a user with that email."
     );
-    next();
-    return;
   }
 
   // Generate a random UUID for the code and generate the expiration for 15
@@ -185,14 +178,10 @@ export const sendResetPasswordEmail = async (
   };
   response = await client.PerformQuery(query);
   if (response.code !== 200) {
-    res.status(400);
-    res.write(
-      JSON.stringify({
-        message: "Failed to set the reset code and expiration.",
-      })
+    return responseHelper.ErrorResponse(
+      ErrorStatusCode.BadRequest,
+      "Failed to set the reset code and expiration."
     );
-    next();
-    return;
   }
 
   // Send the email with the reset link.
@@ -225,16 +214,14 @@ export const sendResetPasswordEmail = async (
   var ses = new aws.SES({ apiVersion: "2010-12-01" });
   await ses.sendEmail(emailParams, (err, data) => {
     if (err) {
-      res.status(400);
-      res.write(JSON.stringify({ message: "Failed to send an email." }));
-      next();
-      return;
+      return responseHelper.ErrorResponse(
+        ErrorStatusCode.BadRequest,
+        "Failed to send the email."
+      );
     }
   });
 
-  res.status(200);
-  next();
-  return;
+  responseHelper.GenericResponse(HttpStatusCode.Ok);
 };
 
 export const changePassword = async (
@@ -243,6 +230,7 @@ export const changePassword = async (
   next: NextFunction
 ) => {
   const client = req.body.client as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
   const resetCode = req.body.resetCode as string;
   const newPassword = req.body.newPassword as string;
 
@@ -255,17 +243,11 @@ export const changePassword = async (
   };
   const response = await client.PerformQuery(query);
   if (response.code !== 200 || response.rows.length === 0) {
-    res.status(400);
-    res.write(
-      JSON.stringify({
-        message: "Couldn't reset your password. The code might have expired.",
-      })
+    return responseHelper.ErrorResponse(
+      ErrorStatusCode.BadRequest,
+      "Couldn't reset your password. the code might have expired."
     );
-    next();
-    return;
   }
 
-  res.status(200);
-  next();
-  return;
+  responseHelper.GenericResponse(HttpStatusCode.Ok);
 };

@@ -4,6 +4,12 @@ import { QueryProps, DatabaseConnection } from "../../utils/database";
 import { createHourExpiration } from "../../utils/date";
 import { AdminGetResponseData, DefaultValues } from "../../types";
 import { ReturnUser } from "./types";
+import {
+  ErrorStatusCode,
+  HttpStatusCode,
+  ResponseHelper,
+  SuccessfulStatusCode,
+} from "../../utils/response";
 
 /**
  * Gets a list of all relevant user information to display in the admin center.
@@ -27,6 +33,7 @@ export const getUsers = async (
   };
   // Get the users from the database.
   const client = req.body.client as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
   let query: QueryProps = {
     name: "userGetQuery",
     text: "SELECT userid, username, email, clientid FROM users;",
@@ -77,7 +84,7 @@ export const getUsers = async (
     });
   });
 
-  res.status(200).write(JSON.stringify(responseData));
+  responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, responseData);
 };
 
 /**
@@ -94,6 +101,7 @@ export const createUser = async (
 ) => {
   // Get the required data from the request.
   const client = req.body.client as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
   const newElement = req.body.newElement as DefaultValues[];
 
   // Generate new ids and fields for the user.
@@ -125,11 +133,14 @@ export const createUser = async (
       email: newElement[2].value.toString(),
       clientid: newClientId,
     };
-    res.status(200).write(JSON.stringify({ newElement: newUser }));
+    responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
+      newElement: newUser,
+    });
   } else {
-    res
-      .status(500)
-      .write(JSON.stringify({ message: "Failed to create user." }));
+    responseHelper.ErrorResponse(
+      ErrorStatusCode.BadRequest,
+      "Failed to create user."
+    );
   }
 };
 
@@ -145,6 +156,7 @@ export const updateUser = async (
   next: NextFunction
 ) => {
   const client = req.body.client as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
   var updateElement = req.body.updateElement as DefaultValues[];
 
   let query: QueryProps = {
@@ -165,11 +177,14 @@ export const updateUser = async (
       email: updateElement[2].value.toString(),
       clientid: updateElement[4].value.toString(),
     };
-    res.status(200).write(JSON.stringify({ updatedElement: updateUser }));
+    responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
+      updatedElement: updateUser,
+    });
   } else {
-    res
-      .status(500)
-      .write(JSON.stringify({ message: "The user failed to update." }));
+    responseHelper.ErrorResponse(
+      ErrorStatusCode.BadRequest,
+      "The user failed to update."
+    );
   }
 };
 
@@ -185,6 +200,7 @@ export const deleteUser = async (
   next: NextFunction
 ) => {
   const client = req.body.client as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
   var deleteElement = req.body.deleteElement as DefaultValues[];
 
   // Construct delete query.
@@ -194,6 +210,7 @@ export const deleteUser = async (
     values: [deleteElement[3].value.toString()],
   };
   const response = await client.PerformQuery(query);
-  // Return the result of the delete query.
-  res.status(response.code);
+  responseHelper.GenericResponse(
+    response.code === 200 ? HttpStatusCode.Ok : HttpStatusCode.BadRequest
+  );
 };

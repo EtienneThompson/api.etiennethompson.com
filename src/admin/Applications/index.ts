@@ -3,6 +3,12 @@ import { v4 as uuidv4 } from "uuid";
 import { QueryProps, DatabaseConnection } from "../../utils/database";
 import { ReturnApp } from "./types";
 import { AdminGetResponseData, DefaultValues } from "../../types";
+import {
+  ErrorStatusCode,
+  HttpStatusCode,
+  ResponseHelper,
+  SuccessfulStatusCode,
+} from "../../utils/response";
 
 /**
  * Gets a list of all applications in the database.
@@ -25,6 +31,7 @@ export const getApplications = async (
   };
   // Get list of the application fields.
   const client = req.body.client as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
   let query: QueryProps = {
     name: "applicationGetQuery",
     text: "SELECT applicationid, applicationname, redirecturl FROM applications;",
@@ -32,10 +39,10 @@ export const getApplications = async (
   };
   let response = await client.PerformQuery(query);
   if (response.code !== 200 || response.rows.length === 0) {
-    res.status(400);
-    res.write(JSON.stringify({ message: "Could not get applications." }));
-    next();
-    return;
+    return responseHelper.ErrorResponse(
+      ErrorStatusCode.BadRequest,
+      "Could not get application."
+    );
   }
 
   responseData.elements = response.rows;
@@ -75,7 +82,10 @@ export const getApplications = async (
     });
   });
 
-  res.status(200).write(JSON.stringify(responseData));
+  return responseHelper.SuccessfulResponse(
+    SuccessfulStatusCode.Ok,
+    responseData
+  );
 };
 
 /**
@@ -91,6 +101,7 @@ export const createApplication = async (
   next: NextFunction
 ) => {
   const client = req.body.client as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
   const newElement = req.body.newElement as DefaultValues[];
 
   // Generate a new application id.
@@ -115,11 +126,14 @@ export const createApplication = async (
       applicationname: newElement[1].value.toString(),
       redirecturl: newElement[2].value.toString(),
     };
-    res.status(200).write(JSON.stringify({ newElement: newApp }));
+    responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
+      newElement: newApp,
+    });
   } else {
-    res
-      .status(500)
-      .write(JSON.stringify({ message: "Failed to create the application." }));
+    return responseHelper.ErrorResponse(
+      ErrorStatusCode.BadRequest,
+      "Failed to create the application."
+    );
   }
 };
 
@@ -136,6 +150,7 @@ export const updateApplication = async (
   next: NextFunction
 ) => {
   const client = req.body.client as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
   var updateElement = req.body.updateElement as DefaultValues[];
 
   // Construct the query to update the application.
@@ -157,11 +172,14 @@ export const updateApplication = async (
       applicationname: updateElement[1].value.toString(),
       redirecturl: updateElement[2].value.toString(),
     };
-    res.status(200).write(JSON.stringify({ updatedElement: udpatedApp }));
+    responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
+      updatedElement: udpatedApp,
+    });
   } else {
-    res
-      .status(500)
-      .write(JSON.stringify({ message: "The application failed to update." }));
+    return responseHelper.ErrorResponse(
+      ErrorStatusCode.BadRequest,
+      "The application failed to update."
+    );
   }
 };
 
@@ -177,6 +195,7 @@ export const deleteApplication = async (
   next: NextFunction
 ) => {
   const client = req.body.client as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
   var deleteElement = req.body.deleteElement as DefaultValues[];
 
   // Construct the query.
@@ -187,5 +206,7 @@ export const deleteApplication = async (
   };
   const response = await client.PerformQuery(query);
   // Return the result of the query.
-  res.status(response.code);
+  responseHelper.GenericResponse(
+    response.code === 200 ? HttpStatusCode.Ok : HttpStatusCode.BadRequest
+  );
 };

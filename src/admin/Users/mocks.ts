@@ -1,6 +1,11 @@
 import { Request, Response, NextFunction } from "express";
 import { v4 as uuidv4 } from "uuid";
 import { AdminGetResponseData, DefaultValues } from "../../types";
+import {
+  HttpStatusCode,
+  ResponseHelper,
+  SuccessfulStatusCode,
+} from "../../utils/response";
 import { ReturnUser } from "./types";
 
 export const mockGetUsers = (
@@ -15,6 +20,8 @@ export const mockGetUsers = (
     newFields: [],
     defaultValues: [],
   };
+
+  const responseHelper = req.body.response as ResponseHelper;
 
   // Generate a random set of users.
   responseData.elements = [
@@ -71,7 +78,7 @@ export const mockGetUsers = (
     });
   });
 
-  res.status(200).write(JSON.stringify(responseData));
+  responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, responseData);
 };
 
 export const mockCreateUser = async (
@@ -79,6 +86,7 @@ export const mockCreateUser = async (
   res: Response,
   next: NextFunction
 ) => {
+  const responseHelper = req.body.response as ResponseHelper;
   const newElement = req.body.newElement as DefaultValues[];
   let newUserId = uuidv4();
   let newClientId = uuidv4();
@@ -89,7 +97,9 @@ export const mockCreateUser = async (
     email: newElement[2].value.toString(),
     clientid: newClientId,
   };
-  res.status(200).write(JSON.stringify({ newElement: newUser }));
+  responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
+    newElement: newUser,
+  });
 };
 
 export const mockUpdateUser = async (
@@ -97,6 +107,7 @@ export const mockUpdateUser = async (
   res: Response,
   next: NextFunction
 ) => {
+  const responseHelper = req.body.response as ResponseHelper;
   const updateElement = req.body.updateElement as DefaultValues[];
 
   let updateUser: ReturnUser = {
@@ -105,7 +116,9 @@ export const mockUpdateUser = async (
     email: updateElement[2].value.toString(),
     clientid: updateElement[4].value.toString(),
   };
-  res.status(200).write(JSON.stringify({ updatedElement: updateUser }));
+  responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
+    updatedElement: updateUser,
+  });
 };
 
 export const mockDeleteUser = async (
@@ -113,5 +126,6 @@ export const mockDeleteUser = async (
   res: Response,
   next: NextFunction
 ) => {
-  res.status(200);
+  const responseHelper = req.body.response as ResponseHelper;
+  responseHelper.GenericResponse(HttpStatusCode.Ok);
 };
