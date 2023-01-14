@@ -2,16 +2,11 @@ import { Request, Response, NextFunction } from "express";
 import { BaseRequest, UserEntry } from "../types";
 import { QueryProps, DatabaseConnection } from "../utils/database";
 import { getCurrentTimeField } from "../utils/date";
-import { ErrorStatusCode, ResponseHelper } from "../utils/response";
+import {
+  AuthenticationFailureReason,
+  ResponseHelper,
+} from "../utils/response";
 import { closeDatabaseConnection } from "./closeDatabaseConnection";
-
-enum AuthenticationFailureReason {
-  InvalidArguments = 101,
-  InvalidClientId = 102,
-  ExpiredSession = 103,
-  InvalidAppId = 104,
-  InvalidUser = 105,
-}
 
 export const validateUser = async (
   req: Request,
@@ -32,6 +27,7 @@ export const validateUser = async (
   if (!reqBody.clientid || !reqBody.appid) {
     await closeDatabaseConnection(req);
     return responseHelper.Unauthorized(
+      AuthenticationFailureReason.InvalidArguments,
       "You must provide both a Client ID and an Application ID to authenticate."
     );
   }
@@ -46,6 +42,7 @@ export const validateUser = async (
   if (response.code !== 200 || response.rows.length === 0) {
     await closeDatabaseConnection(req);
     return responseHelper.Unauthorized(
+      AuthenticationFailureReason.InvalidClientId,
       "You are not a valid user of etiennethompson.com"
     );
   }
@@ -59,6 +56,7 @@ export const validateUser = async (
   if (diff < 0) {
     await closeDatabaseConnection(req);
     return responseHelper.Unauthorized(
+      AuthenticationFailureReason.ExpiredSession,
       "Your session has expired. Please login again."
     );
   }
@@ -75,6 +73,7 @@ export const validateUser = async (
   if (response.code !== 200 || response.rows.length === 0) {
     await closeDatabaseConnection(req);
     return responseHelper.Unauthorized(
+      AuthenticationFailureReason.InvalidAppId,
       "That is not a valid application of etiennethompson.com"
     );
   }
@@ -89,6 +88,7 @@ export const validateUser = async (
   if (response.code !== 200 || response.rows.length === 0) {
     await closeDatabaseConnection(req);
     return responseHelper.Unauthorized(
+      AuthenticationFailureReason.InvalidUser,
       "You are not a user of that application."
     );
   }

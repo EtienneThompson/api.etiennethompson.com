@@ -40,6 +40,14 @@ export enum ErrorStatusCode {
   NotImplemented = 501,
 }
 
+export enum AuthenticationFailureReason {
+  InvalidArguments = 101,
+  InvalidClientId = 102,
+  ExpiredSession = 103,
+  InvalidAppId = 104,
+  InvalidUser = 105,
+}
+
 export class ResponseHelper {
   res: Response;
   next: NextFunction;
@@ -69,9 +77,9 @@ export class ResponseHelper {
     this.next();
   }
 
-  public Unauthorized(message: string) {
+  public Unauthorized(reason: AuthenticationFailureReason, message: string) {
     this.res.status(ErrorStatusCode.Unauthorized);
-    this.res.write(JSON.stringify({ message: message }));
+    this.res.write(JSON.stringify({ reason: reason, message: message }));
     this.res.end();
   }
 
