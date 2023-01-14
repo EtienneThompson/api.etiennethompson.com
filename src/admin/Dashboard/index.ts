@@ -1,4 +1,4 @@
-import { Request, Response } from "express";
+import { Request, Response, NextFunction } from "express";
 import { QueryProps, DatabaseConnection } from "../../utils/database";
 import { TableNames, TableCount, CountData } from "./types";
 
@@ -12,7 +12,7 @@ import { TableNames, TableCount, CountData } from "./types";
 export const getTableCounts = async (
   req: Request,
   res: Response,
-  next: any
+  next: NextFunction
 ): Promise<void> => {
   const client = req.body.client as DatabaseConnection;
   // Query for all database table names in the database.

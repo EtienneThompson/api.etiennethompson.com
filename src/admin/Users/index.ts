@@ -1,4 +1,4 @@
-import { Request, Response } from "express";
+import { Request, Response, NextFunction } from "express";
 import { v4 as uuidv4 } from "uuid";
 import { QueryProps, DatabaseConnection } from "../../utils/database";
 import { createHourExpiration } from "../../utils/date";
@@ -11,7 +11,11 @@ import { ReturnUser } from "./types";
  * @param res The Express response object.
  * @param next The next function in the request lifecycle.
  */
-export const getUsers = async (req: Request, res: Response, next: any) => {
+export const getUsers = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   // These are the fields required by the front end to generically render the
   // admin tables.
   let responseData: AdminGetResponseData = {
@@ -83,7 +87,11 @@ export const getUsers = async (req: Request, res: Response, next: any) => {
  * @param res The Express response object.
  * @param next The next function in the request lifecycle.
  */
-export const createUser = async (req: Request, res: Response, next: any) => {
+export const createUser = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   // Get the required data from the request.
   const client = req.body.client as DatabaseConnection;
   const newElement = req.body.newElement as DefaultValues[];
@@ -131,7 +139,11 @@ export const createUser = async (req: Request, res: Response, next: any) => {
  * @param res The Express response object.
  * @param next The next function in the request lifecycle.
  */
-export const updateUser = async (req: Request, res: Response, next: any) => {
+export const updateUser = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   const client = req.body.client as DatabaseConnection;
   var updateElement = req.body.updateElement as DefaultValues[];
 
@@ -167,7 +179,11 @@ export const updateUser = async (req: Request, res: Response, next: any) => {
  * @param res The Express response object.
  * @param next The next function in the request lifecycle.
  */
-export const deleteUser = async (req: Request, res: Response, next: any) => {
+export const deleteUser = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   const client = req.body.client as DatabaseConnection;
   var deleteElement = req.body.deleteElement as DefaultValues[];
 

@@ -1,9 +1,13 @@
-import { Request, Response } from "express";
+import { Request, Response, NextFunction } from "express";
 import { v4 as uuidv4 } from "uuid";
 import { AdminGetResponseData, DefaultValues } from "../../types";
 import { ReturnUser } from "./types";
 
-export const mockGetUsers = (req: Request, res: Response, next: any) => {
+export const mockGetUsers = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   let responseData: AdminGetResponseData = {
     elements: [],
     headers: [],
@@ -73,7 +77,7 @@ export const mockGetUsers = (req: Request, res: Response, next: any) => {
 export const mockCreateUser = async (
   req: Request,
   res: Response,
-  next: any
+  next: NextFunction
 ) => {
   const newElement = req.body.newElement as DefaultValues[];
   let newUserId = uuidv4();
@@ -91,7 +95,7 @@ export const mockCreateUser = async (
 export const mockUpdateUser = async (
   req: Request,
   res: Response,
-  next: any
+  next: NextFunction
 ) => {
   const updateElement = req.body.updateElement as DefaultValues[];
 
@@ -107,7 +111,7 @@ export const mockUpdateUser = async (
 export const mockDeleteUser = async (
   req: Request,
   res: Response,
-  next: any
+  next: NextFunction
 ) => {
   res.status(200);
 };

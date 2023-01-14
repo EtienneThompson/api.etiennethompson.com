@@ -1,5 +1,4 @@
-import { Request, Response } from "express";
-import { Client } from "pg";
+import { Request, Response, NextFunction } from "express";
 import { v4 as uuidv4 } from "uuid";
 import { QueryProps, DatabaseConnection } from "../utils/database";
 import { capitalize, isNullOrWhiteSpace } from "../utils/string";
@@ -51,7 +50,7 @@ const deleteInsertedEntries = async (
 export const getClientDetails = async (
   req: Request,
   res: Response,
-  next: any
+  next: NextFunction
 ) => {
   const client = req.body.awsClient as DatabaseConnection;
 
@@ -122,7 +121,7 @@ export const getClientDetails = async (
 export const getNewClientSchema = async (
   req: Request,
   res: Response,
-  next: any
+  next: NextFunction
 ) => {
   const client = req.body.awsClient as DatabaseConnection;
 
@@ -143,7 +142,7 @@ export const getNewClientSchema = async (
 export const postNewClientDetails = async (
   req: Request,
   res: Response,
-  next: any
+  next: NextFunction
 ) => {
   const client = req.body.awsClient as DatabaseConnection;
   const newClient = req.body.formData as ClientDetails;
@@ -249,7 +248,7 @@ export const postNewClientDetails = async (
 export const updateClientDetails = async (
   req: Request,
   res: Response,
-  next: any
+  next: NextFunction
 ) => {
   const client = req.body.awsClient as DatabaseConnection;
   const clientDetails = req.body.clientDetails as ClientDetails;
@@ -387,7 +386,11 @@ export const updateClientDetails = async (
   next();
 };
 
-export const deleteClient = async (req: Request, res: Response, next: any) => {
+export const deleteClient = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   const client = req.body.awsClient as DatabaseConnection;
   const clientId = req.body.clientId;
 
@@ -443,7 +446,11 @@ export const deleteClient = async (req: Request, res: Response, next: any) => {
   next();
 };
 
-export const getAllTabs = async (req: Request, res: Response, next: any) => {
+export const getAllTabs = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   const client = req.body.awsClient as DatabaseConnection;
 
   // Get all column names other than the id field.
@@ -455,7 +462,11 @@ export const getAllTabs = async (req: Request, res: Response, next: any) => {
   next();
 };
 
-export const createTab = async (req: Request, res: Response, next: any) => {
+export const createTab = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   const client = req.body.awsClient as DatabaseConnection;
   const tabName = createTabName(req.body.tabName);
   const tabNameKey = `${tabName}_id`;
@@ -498,7 +509,7 @@ export const createTab = async (req: Request, res: Response, next: any) => {
 export const updateTabName = async (
   req: Request,
   res: Response,
-  next: any
+  next: NextFunction
 ) => {
   const client = req.body.awsClient as DatabaseConnection;
   const currentName = createTabName(req.body.currentName);
@@ -615,7 +626,11 @@ export const updateTabName = async (
   next();
 };
 
-export const deleteTab = async (req: Request, res: Response, next: any) => {
+export const deleteTab = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   const client = req.body.awsClient as DatabaseConnection;
   const tabName = createTabName(req.body.tabName);
 
@@ -671,7 +686,11 @@ export const deleteTab = async (req: Request, res: Response, next: any) => {
   next();
 };
 
-export const getAllFields = async (req: Request, res: Response, next: any) => {
+export const getAllFields = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   const client = req.body.awsClient as DatabaseConnection;
 
   let tableNames = await getTableSchema(client.GetClient(), "clients");
@@ -695,7 +714,7 @@ export const getAllFields = async (req: Request, res: Response, next: any) => {
 export const getFieldsForTab = async (
   req: Request,
   res: Response,
-  next: any
+  next: NextFunction
 ) => {
   const client = req.body.awsClient as DatabaseConnection;
   const tabName = createTabName(req.query.tabName as string);
@@ -713,7 +732,7 @@ export const getFieldsForTab = async (
 export const getFieldSchema = async (
   req: Request,
   res: Response,
-  next: any
+  next: NextFunction
 ) => {
   const client = req.body.awsClient as DatabaseConnection;
   const tabName = createTabName(req.query.tabName as string);
@@ -795,7 +814,7 @@ export const getFieldSchema = async (
 export const getFieldsMetadata = async (
   req: Request,
   res: Response,
-  next: any
+  next: NextFunction
 ) => {
   const client = req.body.awsClient as DatabaseConnection;
   const tabName = createTabName(req.query.tabName as string);
@@ -826,7 +845,7 @@ export const getFieldsMetadata = async (
 export const reorderFields = async (
   req: Request,
   res: Response,
-  next: any
+  next: NextFunction
 ) => {
   const client = req.body.awsClient as DatabaseConnection;
   const fieldMetadata = req.body.fieldMetadata as FieldMetadata[];
@@ -858,7 +877,11 @@ export const reorderFields = async (
   next();
 };
 
-export const createField = async (req: Request, res: Response, next: any) => {
+export const createField = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   const client = req.body.awsClient as DatabaseConnection;
   const tabName = req.body.tabName.toLowerCase() as string;
   const fieldData = req.body.fieldData as DatabaseColumn;
@@ -981,7 +1004,11 @@ export const createField = async (req: Request, res: Response, next: any) => {
   next();
 };
 
-export const updateField = async (req: Request, res: Response, next: any) => {
+export const updateField = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   const client = req.body.awsClient as DatabaseConnection;
   const tabName: string = createTabName(req.body.tabName);
   const fieldName: string = createFieldName(tabName, req.body.fieldName);
@@ -1126,7 +1153,11 @@ export const updateField = async (req: Request, res: Response, next: any) => {
   next();
 };
 
-export const deleteField = async (req: Request, res: Response, next: any) => {
+export const deleteField = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   const client = req.body.awsClient as DatabaseConnection;
 
   const tabName = createTabName(req.body.tabName);

@@ -1,4 +1,4 @@
-import { Request, Response } from "express";
+import { Request, Response, NextFunction } from "express";
 import { v4 as uuidv4 } from "uuid";
 import aws from "aws-sdk";
 import { LoginRequest, ApplicationEntry, UserAdminStatus } from "./types";
@@ -10,7 +10,11 @@ import {
   getCurrentTimeField,
 } from "../utils/date";
 
-export const loginHandler = async (req: Request, res: Response, next: any) => {
+export const loginHandler = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   const client = req.body.client as DatabaseConnection;
   var reqBody = req.body as LoginRequest;
 
@@ -148,7 +152,7 @@ export const loginHandler = async (req: Request, res: Response, next: any) => {
 export const sendResetPasswordEmail = async (
   req: Request,
   res: Response,
-  next: any
+  next: NextFunction
 ) => {
   const client = req.body.client as DatabaseConnection;
   var email = req.body.email as string;
@@ -236,7 +240,7 @@ export const sendResetPasswordEmail = async (
 export const changePassword = async (
   req: Request,
   res: Response,
-  next: any
+  next: NextFunction
 ) => {
   const client = req.body.client as DatabaseConnection;
   const resetCode = req.body.resetCode as string;

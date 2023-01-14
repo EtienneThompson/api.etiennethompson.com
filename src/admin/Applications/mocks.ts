@@ -1,4 +1,4 @@
-import { Request, Response } from "express";
+import { Request, Response, NextFunction } from "express";
 import { v4 as uuidv4 } from "uuid";
 import { AdminGetResponseData, DefaultValues } from "../../types";
 import { ReturnApp } from "./types";
@@ -6,7 +6,7 @@ import { ReturnApp } from "./types";
 export const mockGetApplications = async (
   req: Request,
   res: Response,
-  next: any
+  next: NextFunction
 ) => {
   let responseData: AdminGetResponseData = {
     elements: [],
@@ -69,7 +69,7 @@ export const mockGetApplications = async (
 export const mockCreateApplication = async (
   req: Request,
   res: Response,
-  next: any
+  next: NextFunction
 ) => {
   const newElement = req.body.newElement as DefaultValues[];
   let newAppId = uuidv4();
@@ -85,7 +85,7 @@ export const mockCreateApplication = async (
 export const mockUpdateApplication = async (
   req: Request,
   res: Response,
-  next: any
+  next: NextFunction
 ) => {
   const updateElement = req.body.updateElement as DefaultValues[];
 
@@ -100,7 +100,7 @@ export const mockUpdateApplication = async (
 export const mockDeleteApplication = async (
   req: Request,
   res: Response,
-  next: any
+  next: NextFunction
 ) => {
   res.status(200);
 };

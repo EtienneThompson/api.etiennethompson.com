@@ -1,4 +1,4 @@
-import { Request, Response } from "express";
+import { Request, Response, NextFunction } from "express";
 import { v4 as uuidv4 } from "uuid";
 import aws from "aws-sdk";
 import { QueryProps, DatabaseConnection } from "../utils/database";
@@ -267,7 +267,7 @@ const deleteFile = async (imageUrl: string): Promise<void> => {
 export const getBaseFolder = async (
   req: Request,
   res: Response,
-  next: any
+  next: NextFunction
 ): Promise<void> => {
   const client = req.body.client as DatabaseConnection;
   let params = req.query;
@@ -314,7 +314,7 @@ export const getBaseFolder = async (
 export const getFolder = async (
   req: Request,
   res: Response,
-  next: any
+  next: NextFunction
 ): Promise<void> => {
   const client = req.body.client as DatabaseConnection;
   let params = req.query;
@@ -373,7 +373,7 @@ export const getFolder = async (
 export const getItem = async (
   req: Request,
   res: Response,
-  next: any
+  next: NextFunction
 ): Promise<void> => {
   const client = req.body.client as DatabaseConnection;
   let params = req.query;
@@ -430,7 +430,7 @@ export const getItem = async (
 export const getFolderChildren = async (
   req: Request,
   res: Response,
-  next: any
+  next: NextFunction
 ) => {
   const client = req.body.client as DatabaseConnection;
   let clientid = req.query.clientid as string;
@@ -462,7 +462,11 @@ export const getFolderChildren = async (
  * @param res The Express response object.
  * @param next The next function in the request lifecycle.
  */
-export const createFolder = async (req: Request, res: Response, next: any) => {
+export const createFolder = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   const client = req.body.client as DatabaseConnection;
   // insert into folders (folderid, name, description, owner, picture, parent_folder, created, updated) VALUES (...);
   const newFolder = req.body as CreateRequest;
@@ -533,7 +537,11 @@ export const createFolder = async (req: Request, res: Response, next: any) => {
  * @param res The Express response object.
  * @param next The next function in the request lifecycle.
  */
-export const createItem = async (req: Request, res: Response, next: any) => {
+export const createItem = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   const client = req.body.client as DatabaseConnection;
   // insert into items (itemid, name, description, picture, owner, parent_folder, created, updated) VALUES (...);
   const newItem = req.body as CreateRequest;
@@ -604,7 +612,11 @@ export const createItem = async (req: Request, res: Response, next: any) => {
  * @param res The Express response object.
  * @param next The next function in the request lifecycle.
  */
-export const updateFolder = async (req: Request, res: Response, next: any) => {
+export const updateFolder = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   const client = req.body.client as DatabaseConnection;
   const clientid: string = req.body.clientid;
   var reqBody = req.body;
@@ -697,7 +709,11 @@ export const updateFolder = async (req: Request, res: Response, next: any) => {
  * @param res The Express response object.
  * @param next The next function in the request lifecycle.
  */
-export const updateItem = async (req: Request, res: Response, next: any) => {
+export const updateItem = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   const client = req.body.client as DatabaseConnection;
   const clientid: string = req.body.clientid;
   var reqBody = req.body;
@@ -788,7 +804,11 @@ export const updateItem = async (req: Request, res: Response, next: any) => {
  * @param res The Express response object.
  * @param next The next function in the request lifecycle.
  */
-export const deleteFolder = async (req: Request, res: Response, next: any) => {
+export const deleteFolder = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   const client = req.body.client as DatabaseConnection;
   const folderid: string = req.body.folderid;
   const clientid: string = req.body.clientid;
@@ -841,7 +861,11 @@ export const deleteFolder = async (req: Request, res: Response, next: any) => {
  * @param res The Express response object.
  * @param next The next function in the request lifecycle.
  */
-export const deleteItem = async (req: Request, res: Response, next: any) => {
+export const deleteItem = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   const client = req.body.client as DatabaseConnection;
   const itemid: string = req.body.itemid;
   const clientid: string = req.body.clientid;
@@ -896,7 +920,11 @@ export const deleteItem = async (req: Request, res: Response, next: any) => {
  * @param res The Express response object.
  * @param next The next function in the request lifecycle.
  */
-export const moveElement = async (req: Request, res: Response, next: any) => {
+export const moveElement = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   const client = req.body.client as DatabaseConnection;
   const moveToId: string = req.body.moveToId;
   const movingId: string = req.body.movingId;

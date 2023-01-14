@@ -1,4 +1,4 @@
-import { Request, Response } from "express";
+import { Request, Response, NextFunction } from "express";
 import { QueryProps, DatabaseConnection } from "../../utils/database";
 import { AdminGetResponseData, DefaultValues } from "../../types";
 import { ApplicationUser, ReturnAppUser } from "./types";
@@ -12,7 +12,7 @@ import { ApplicationUser, ReturnAppUser } from "./types";
 export const getApplicationUsers = async (
   req: Request,
   res: Response,
-  next: any
+  next: NextFunction
 ) => {
   // Template for all the data required.
   let responseData: AdminGetResponseData = {
@@ -146,7 +146,7 @@ export const getApplicationUsers = async (
 export const createApplicationUser = async (
   req: Request,
   res: Response,
-  next: any
+  next: NextFunction
 ) => {
   const client = req.body.client as DatabaseConnection;
   const newElement = req.body.newElement as DefaultValues[];
@@ -199,7 +199,7 @@ export const createApplicationUser = async (
 export const updateApplicationUser = async (
   req: Request,
   res: Response,
-  next: any
+  next: NextFunction
 ) => {
   const client = req.body.client as DatabaseConnection;
   var updateElement = req.body.updateElement as DefaultValues[];
@@ -254,7 +254,7 @@ export const updateApplicationUser = async (
 export const deleteApplicationUser = async (
   req: Request,
   res: Response,
-  next: any
+  next: NextFunction
 ) => {
   const client = req.body.client as DatabaseConnection;
   var deleteElement = req.body.deleteElement as DefaultValues[];
