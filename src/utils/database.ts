@@ -27,9 +27,11 @@ export interface QueryProps {
 
 export class DatabaseConnection {
   client: Client | undefined;
+  isOpen: boolean;
 
   constructor() {
     this.client = undefined;
+    this.isOpen = false;
   }
 
   public async Initialize(
@@ -47,7 +49,7 @@ export class DatabaseConnection {
       port: port,
     });
 
-    await this.client.connect();
+    await this.Connect();
   }
 
   public async InitializeByConnectionString(
@@ -60,7 +62,8 @@ export class DatabaseConnection {
       },
     });
 
-    await this.client.connect();
+    await this.Connect();
+    this.isOpen = true;
   }
 
   public async Connect(): Promise<void> {
@@ -69,14 +72,16 @@ export class DatabaseConnection {
     }
 
     await this.client.connect();
+    this.isOpen = true;
   }
 
   public async Close(): Promise<void> {
-    if (this.client === undefined) {
+    if (this.client === undefined || !this.isOpen) {
       throw new Error("The client wasn't initialized.");
     }
 
     await this.client.end();
+    this.isOpen = false;
   }
 
   public GetClient(): Client {
@@ -85,6 +90,10 @@ export class DatabaseConnection {
     }
 
     return this.client;
+  }
+
+  public async Begin(): Promise<void> {
+    await this.MakeSingleQuery("BEGIN");
   }
 
   public async PerformQuery(query: QueryProps): Promise<QueryResponse> {
@@ -111,10 +120,20 @@ export class DatabaseConnection {
     return response.rows[0].userid as string;
   }
 
+  public async Commit(): Promise<void> {
+    await this.MakeSingleQuery("COMMIT");
+  }
+
+  public async Rollback(): Promise<void> {
+    await this.MakeSingleQuery("ROLLBACK");
+  }
+
   private async MakeSingleQuery(
     query: QueryProps | string
   ): Promise<QueryResponse> {
-    if (this.client === undefined) {
+    // Don't make the query if the client wasn't initialized or if the client
+    // connection has already been closed.
+    if (this.client === undefined || !this.isOpen) {
       throw new Error("The client wasn't initialized.");
     }
 
@@ -122,7 +141,7 @@ export class DatabaseConnection {
       const response = await this.client.query(query);
       return { code: 200, rows: response.rows } as QueryResponse;
     } catch (error) {
-      return { code: 400, rows: [] } as QueryResponse;
+      throw error;
     }
   }
 }

@@ -4,11 +4,14 @@ import { DatabaseConnection } from "../utils/database";
 import { ResponseHelper } from "../utils/response";
 
 const closeDatabaseConnectionInternal = async (req: Request) => {
+  console.log("closeDatabaseConnection");
   const client: DatabaseConnection = req.body.client;
+  await client.Commit();
   await client.Close();
 
   if (req.body.awsClient) {
     const awsClient: Client = req.body.awsClient;
+    await client.Commit();
     await awsClient.end();
   }
 };

@@ -28,6 +28,7 @@ export const createDatabaseConnection = async (
       process.env.THOMPSON_ACCOUNTING_DATABASE_DATABASE,
       5432
     );
+    await awsClient.Begin();
     req.body.awsClient = awsClient;
   }
 
@@ -40,6 +41,7 @@ export const createDatabaseConnection = async (
 
   const client = new DatabaseConnection();
   await client.InitializeByConnectionString(process.env.DATABASE_URL);
+  await client.Begin();
   req.body.client = client;
 
   const responseHelper = new ResponseHelper(res, next);
