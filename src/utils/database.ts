@@ -96,28 +96,23 @@ export class DatabaseConnection {
     await this.MakeSingleQuery("BEGIN");
   }
 
-  public async PerformQuery(query: QueryProps): Promise<QueryResponse> {
-    const response = await this.MakeSingleQuery(query);
-    return response;
+  public async PerformQuery(query: QueryProps): Promise<any[]> {
+    return await this.MakeSingleQuery(query);
   }
 
-  public async PerformFormattedQuery(query: string): Promise<QueryResponse> {
-    const response = await this.MakeSingleQuery(query);
-    return response;
+  public async PerformFormattedQuery(query: string): Promise<any[]> {
+    return await this.MakeSingleQuery(query);
   }
 
-  public async GetUserId(clientid: string): Promise<string | null> {
+  public async GetUserId(clientid: string): Promise<string> {
     let query: QueryProps = {
       name: "inventoryGetUserIdQuery",
       text: "SELECT userid FROM users WHERE clientid=$1;",
       values: [clientid],
     };
-    let response = await this.MakeSingleQuery(query);
-    if (response.code !== 200 || response.rows.length === 0) {
-      return null;
-    }
+    let rows = await this.MakeSingleQuery(query);
     // The client id was verified in middleware, so this should always return a value.
-    return response.rows[0].userid as string;
+    return rows[0].userid as string;
   }
 
   public async Commit(): Promise<void> {
@@ -128,9 +123,7 @@ export class DatabaseConnection {
     await this.MakeSingleQuery("ROLLBACK");
   }
 
-  private async MakeSingleQuery(
-    query: QueryProps | string
-  ): Promise<QueryResponse> {
+  private async MakeSingleQuery(query: QueryProps | string): Promise<any[]> {
     // Don't make the query if the client wasn't initialized or if the client
     // connection has already been closed.
     if (this.client === undefined || !this.isOpen) {
@@ -139,7 +132,7 @@ export class DatabaseConnection {
 
     try {
       const response = await this.client.query(query);
-      return { code: 200, rows: response.rows } as QueryResponse;
+      return response.rows;
     } catch (error) {
       throw error;
     }

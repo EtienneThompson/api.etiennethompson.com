@@ -30,29 +30,6 @@ import {
 
 const format = require("pg-format");
 
-const deleteInsertedEntries = async (
-  client: DatabaseConnection,
-  insertedEntries: InsertedEntry[]
-): Promise<void> => {
-  for (let entry of insertedEntries) {
-    let query: QueryProps = {
-      name: `delete${entry.tableName}Entry`,
-      text: `DELETE FROM ${entry.tableName} WHERE ${entry.tableName}_id = $1`,
-      values: [entry.id],
-    };
-    let response = await client.PerformQuery(query);
-    if (response.code !== 200) {
-      console.log(
-        `Entry ${entry.id} failed to delete from table ${entry.tableName}`
-      );
-    } else {
-      console.log(
-        `Successfully delete entry ${entry.id} from table ${entry.tableName}`
-      );
-    }
-  }
-};
-
 export const getClientDetails = async (
   req: Request,
   res: Response,
@@ -89,8 +66,8 @@ export const getClientDetails = async (
 
   let sql = `SELECT ${selectString} FROM clients ${joinString};`;
 
-  let response = await client.PerformFormattedQuery(sql);
-  if (response.code !== 200 || response.rows.length === 0) {
+  let rows = await client.PerformFormattedQuery(sql);
+  if (rows.length === 0) {
     return responseHelper.ErrorResponse(
       ErrorStatusCode.BadRequest,
       "Failed to get clients."
@@ -99,7 +76,7 @@ export const getClientDetails = async (
 
   let allClientDetails: ClientDetails[] = [];
   // Need to use the client schema to parse all of the returned rows.
-  for (let details of response.rows) {
+  for (let details of rows) {
     // Create a deep copy of the schema tabs.
     let clientDetails: ClientDetails = {
       id: details.id,
@@ -208,14 +185,7 @@ export const postNewClientDetails = async (
       text: `INSERT INTO ${tabData.name} (${insertNames}) VALUES (${valuePlaceholders});`,
       values: values,
     };
-    let response = await client.PerformQuery(query);
-    if (response.code !== 200) {
-      await deleteInsertedEntries(client, insertedEntries);
-      return responseHelper.ErrorResponse(
-        ErrorStatusCode.BadRequest,
-        `Unable to insert into ${tabData.name}`
-      );
-    }
+    await client.PerformQuery(query);
 
     insertedEntries.push({
       tableName: tabData.name,
@@ -231,14 +201,7 @@ export const postNewClientDetails = async (
     )}) VALUES (${foreignPlaceholders.join(", ")});`,
     values: foreignKeys,
   };
-  let response = await client.PerformQuery(query);
-  if (response.code !== 200) {
-    await deleteInsertedEntries(client, insertedEntries);
-    return responseHelper.ErrorResponse(
-      ErrorStatusCode.BadRequest,
-      "Unable to insert into clients."
-    );
-  }
+  await client.PerformQuery(query);
 
   responseHelper.GenericResponse(HttpStatusCode.Ok);
 };
@@ -269,14 +232,8 @@ export const updateClientDetails = async (
     text: "SELECT * FROM clients WHERE id=$1;",
     values: [clientDetails.id],
   };
-  let response = await client.PerformQuery(query);
-  if (response.code !== 200) {
-    return responseHelper.ErrorResponse(
-      ErrorStatusCode.BadRequest,
-      "Failed to get client entries."
-    );
-  }
-  let entries = response.rows[0];
+  let rows = await client.PerformQuery(query);
+  let entries = rows[0];
 
   for (let tabData of clientDetails.tabs) {
     // Get the list of column names and values to insert.
@@ -324,13 +281,7 @@ export const updateClientDetails = async (
         }_id = '${entries[tabData.name]}';`,
         values: values,
       };
-      let response = await client.PerformQuery(query);
-      if (response.code !== 200) {
-        return responseHelper.ErrorResponse(
-          ErrorStatusCode.BadRequest,
-          `Failed to update values for ${tabData.name}`
-        );
-      }
+      await client.PerformQuery(query);
     } else {
       // Create a new id for the entry.
       let entryId = uuidv4();
@@ -341,29 +292,14 @@ export const updateClientDetails = async (
         text: `INSERT INTO ${tabData.name} (${insertNames}) VALUES (${valuePlaceholders});`,
         values: values,
       };
-      let response = await client.PerformQuery(query);
-      if (response.code !== 200) {
-        return responseHelper.ErrorResponse(
-          ErrorStatusCode.BadRequest,
-          `Unable to insert into ${tabData.name}`
-        );
-      }
+      await client.PerformQuery(query);
 
       query = {
         name: `insert${tabData.name}ToClients`,
         text: `UPDATE clients SET ${tabData.name} = '${entryId}' WHERE id = '${clientDetails.id}';`,
         values: [],
       };
-      response = await client.PerformQuery(query);
-      if (response.code !== 200) {
-        deleteInsertedEntries(client, [
-          { tableName: tabData.name, id: entryId },
-        ]);
-        return responseHelper.ErrorResponse(
-          ErrorStatusCode.BadRequest,
-          `Couldn't relate ${tabData.name} entry to clients.`
-        );
-      }
+      await client.PerformQuery(query);
     }
   }
 
@@ -384,8 +320,8 @@ export const deleteClient = async (
     text: "SELECT * FROM clients WHERE id=$1",
     values: [clientId],
   };
-  let response = await client.PerformQuery(query);
-  if (response.code !== 200 || response.rows.length === 0) {
+  let tableNames = await client.PerformQuery(query);
+  if (tableNames.length === 0) {
     return responseHelper.ErrorResponse(
       ErrorStatusCode.BadRequest,
       "Failed to get the client's details."
@@ -397,28 +333,16 @@ export const deleteClient = async (
     text: "DELETE FROM clients WHERE id=$1 RETURNING *;",
     values: [clientId],
   };
-  response = await client.PerformQuery(query);
-  if (response.code !== 200 || response.rows.length === 0) {
-    return responseHelper.ErrorResponse(
-      ErrorStatusCode.BadRequest,
-      "Failed to delete the client details."
-    );
-  }
+  await client.PerformQuery(query);
 
-  for (const [tableName, id] of Object.entries(response.rows[0])) {
+  for (const [tableName, id] of Object.entries(tableNames[0])) {
     if (tableName === "id") {
       continue;
     }
 
     let sqlString = `DELETE FROM %I WHERE ${tableName}_id='%s' RETURNING *;`;
     let sql = format(sqlString, tableName, id);
-    let response = await client.PerformFormattedQuery(sql);
-    if (response.code !== 200 || response.rows.length === 0) {
-      return responseHelper.ErrorResponse(
-        ErrorStatusCode.BadRequest,
-        "Failed to delete the client details."
-      );
-    }
+    await client.PerformFormattedQuery(sql);
   }
 
   responseHelper.GenericResponse(HttpStatusCode.Ok);
@@ -457,26 +381,14 @@ export const createTab = async (
     text: `CREATE TABLE ${tabName} (${tabNameKey} VARCHAR(36) PRIMARY KEY);`,
     values: [],
   };
-  let response = await client.PerformQuery(query);
-  if (response.code !== 200) {
-    return responseHelper.ErrorResponse(
-      ErrorStatusCode.BadRequest,
-      `Could not create tab ${tabName}.`
-    );
-  }
+  await client.PerformQuery(query);
 
   query = {
     name: "AddTabColumn",
     text: `ALTER TABLE clients ADD COLUMN ${tabName} VARCHAR(36) CONSTRAINT clients_${tabName}_fk_${tabNameKey} REFERENCES ${tabName} (${tabNameKey});`,
     values: [],
   };
-  response = await client.PerformQuery(query);
-  if (response.code !== 200) {
-    return responseHelper.ErrorResponse(
-      ErrorStatusCode.BadRequest,
-      `Could not add the tab ${tabName} to clients.`
-    );
-  }
+  await client.PerformQuery(query);
 
   responseHelper.GenericResponse(HttpStatusCode.Ok);
 };
@@ -492,57 +404,27 @@ export const updateTabName = async (
   const newName = createTabName(req.body.newName);
 
   let sql = format("ALTER TABLE %I RENAME TO %s;", currentName, newName);
-  let response = await client.PerformFormattedQuery(sql);
-  if (response.code !== 200) {
-    return responseHelper.ErrorResponse(
-      ErrorStatusCode.BadRequest,
-      `Failed to rename table ${currentName} to ${newName}`
-    );
-  }
+  await client.PerformFormattedQuery(sql);
 
   // ALTER TABLE ${newName} RENAME CONSTRAINT ${currentName}_pkey TO ${newName}_pkey;
   let sqlString = `ALTER TABLE %I RENAME CONSTRAINT ${currentName}_PKEY TO ${newName}_pkey;`;
   sql = format(sqlString, newName);
-  response = await client.PerformFormattedQuery(sql);
-  if (response.code !== 200) {
-    return responseHelper.ErrorResponse(
-      ErrorStatusCode.BadRequest,
-      `Failed to rename table ${newName} constraint.`
-    );
-  }
+  await client.PerformFormattedQuery(sql);
 
   // ALTER TABLE ${newName} RENAME COLUMN ${currentName)_id TO ${newName}_id;
   sqlString = `ALTER TABLE %I RENAME COLUMN ${currentName}_id TO ${newName}_id;`;
   sql = format(sqlString, newName);
-  response = await client.PerformFormattedQuery(sql);
-  if (response.code !== 200) {
-    return responseHelper.ErrorResponse(
-      ErrorStatusCode.BadRequest,
-      `Failed to update column name ${currentName}_id in table ${newName}`
-    );
-  }
+  await client.PerformFormattedQuery(sql);
 
   // ALTER TABLE clients RENAME COLUMN ${currentName} TO ${newName};
   sqlString = `ALTER TABLE clients RENAME COLUMN %s TO %s;`;
   sql = format(sqlString, currentName, newName);
-  response = await client.PerformFormattedQuery(sql);
-  if (response.code !== 200) {
-    return responseHelper.ErrorResponse(
-      ErrorStatusCode.BadRequest,
-      `Failed to rename column ${currentName} in clients`
-    );
-  }
+  await client.PerformFormattedQuery(sql);
 
   sqlString =
     "UPDATE field_metadata SET tab_name='%s' WHERE tab_name='%s' RETURNING *;";
   sql = format(sqlString, newName, currentName);
-  response = await client.PerformFormattedQuery(sql);
-  if (response.code !== 200 || response.rows.length === 0) {
-    return responseHelper.ErrorResponse(
-      ErrorStatusCode.BadRequest,
-      `Failed to update field metadata for fields in ${currentName}`
-    );
-  }
+  await client.PerformFormattedQuery(sql);
 
   // Need to now rename all fields in that table, as their hash will be different now.
   let schema = await getTableSchema(client.GetClient(), newName);
@@ -556,24 +438,12 @@ export const updateTabName = async (
     let newFieldName = createFieldName(newName, column.column_name);
     sqlString = "ALTER TABLE %I RENAME COLUMN %s TO %s;";
     sql = format(sqlString, newName, oldFieldName, newFieldName);
-    response = await client.PerformFormattedQuery(sql);
-    if (response.code !== 200) {
-      return responseHelper.ErrorResponse(
-        ErrorStatusCode.BadRequest,
-        "Failed to rename column"
-      );
-    }
+    await client.PerformFormattedQuery(sql);
 
     sqlString =
       "UPDATE field_metadata SET field_name='%s' WHERE field_name='%s' RETURNING *;";
     sql = format(sqlString, newFieldName, oldFieldName);
-    response = await client.PerformFormattedQuery(sql);
-    if (response.code !== 200) {
-      return responseHelper.ErrorResponse(
-        ErrorStatusCode.BadRequest,
-        "Failed to rename metadata column"
-      );
-    }
+    await client.PerformFormattedQuery(sql);
   }
 
   responseHelper.GenericResponse(HttpStatusCode.Ok);
@@ -593,26 +463,14 @@ export const deleteTab = async (
     text: `ALTER TABLE clients DROP COLUMN ${tabName};`,
     values: [],
   };
-  let response = await client.PerformQuery(query);
-  if (response.code !== 200) {
-    return responseHelper.ErrorResponse(
-      ErrorStatusCode.BadRequest,
-      `Failed to delete column ${tabName} from clients.`
-    );
-  }
+  await client.PerformQuery(query);
 
   query = {
     name: "dropTabTable",
     text: `DROP TABLE ${tabName};`,
     values: [],
   };
-  response = await client.PerformQuery(query);
-  if (response.code !== 200) {
-    return responseHelper.ErrorResponse(
-      ErrorStatusCode.BadRequest,
-      `Failed to drop table ${tabName}`
-    );
-  }
+  await client.PerformQuery(query);
 
   // Delete all metadata associated with the tab.
   query = {
@@ -620,13 +478,7 @@ export const deleteTab = async (
     text: "DELETE FROM field_metadata WHERE tab_name=$1;",
     values: [tabName],
   };
-  response = await client.PerformQuery(query);
-  if (response.code !== 200) {
-    return responseHelper.ErrorResponse(
-      ErrorStatusCode.BadRequest,
-      `Failed to delete metadata for tab ${tabName}`
-    );
-  }
+  await client.PerformQuery(query);
 
   responseHelper.GenericResponse(HttpStatusCode.Ok);
 };
@@ -802,13 +654,7 @@ export const reorderFields = async (
       text: "UPDATE field_metadata SET position = $1 WHERE tab_name=$2 AND field_name=$3 RETURNING *;",
       values: [metadata.position, metadata.tab_name, fieldName],
     };
-    const response = await client.PerformQuery(query);
-    if (response.code !== 200 || response.rows.length === 0) {
-      responseHelper.ErrorResponse(
-        ErrorStatusCode.BadRequest,
-        `Couldn't update metadata for field ${metadata.field_name}`
-      );
-    }
+    await client.PerformQuery(query);
   }
 
   responseHelper.GenericResponse(HttpStatusCode.Ok);
@@ -860,13 +706,7 @@ export const createField = async (
       text: createEnumQuery,
       values: [],
     };
-    let response = await client.PerformQuery(enumQuery);
-    if (response.code !== 200) {
-      return responseHelper.ErrorResponse(
-        ErrorStatusCode.BadRequest,
-        `Failed to create the enum ${enumName}`
-      );
-    }
+    await client.PerformQuery(enumQuery);
   }
 
   let fieldType: string = "";
@@ -900,13 +740,7 @@ export const createField = async (
     text: queryText,
     values: [],
   };
-  let response = await client.PerformQuery(query);
-  if (response.code !== 200) {
-    return responseHelper.ErrorResponse(
-      ErrorStatusCode.BadRequest,
-      `Failed to add the field ${fieldData.name} to tab ${tabName}`
-    );
-  }
+  await client.PerformQuery(query);
 
   // Add a column to the field metadata.
   let metadataId = uuidv4();
@@ -918,13 +752,7 @@ export const createField = async (
     text: "INSERT INTO field_metadata (metadata_id, tab_name, field_name, position) VALUES ($1, $2, $3, $4);",
     values: [metadataId, tabId, fieldName, position],
   };
-  response = await client.PerformQuery(query);
-  if (response.code !== 200) {
-    return responseHelper.ErrorResponse(
-      ErrorStatusCode.BadRequest,
-      `Failed to create metadata for field ${fieldData.label}`
-    );
-  }
+  await client.PerformQuery(query);
 
   responseHelper.GenericResponse(HttpStatusCode.Ok);
 };
@@ -951,26 +779,14 @@ export const updateField = async (
       text: `ALTER TABLE ${tabName} RENAME COLUMN ${fieldName} TO ${newFieldName};`,
       values: [],
     };
-    let response = await client.PerformQuery(query);
-    if (response.code !== 200) {
-      return responseHelper.ErrorResponse(
-        ErrorStatusCode.BadRequest,
-        `Failed to rename the column ${fieldName}`
-      );
-    }
+    await client.PerformQuery(query);
 
     query = {
       name: "UpdateFieldMetadataName",
       text: "UPDATE field_metadata SET field_name = $1 WHERE field_name=$2 RETURNING *;",
       values: [newFieldName, fieldName],
     };
-    response = await client.PerformQuery(query);
-    if (response.code !== 200 || response.rows.length === 0) {
-      return responseHelper.ErrorResponse(
-        ErrorStatusCode.BadRequest,
-        "Couldn't update field metadata name."
-      );
-    }
+    await client.PerformQuery(query);
   }
 
   // update the required status of the column.
@@ -988,13 +804,7 @@ export const updateField = async (
     };
   }
 
-  let response = await client.PerformQuery(query);
-  if (response.code !== 200) {
-    return responseHelper.ErrorResponse(
-      ErrorStatusCode.BadRequest,
-      `Failed to update required status for column ${newFieldName}`
-    );
-  }
+  await client.PerformQuery(query);
 
   // If it is a dropdown, update the values if any have changed.
   // ALTER TYPE enumName ADD VALUE 'newVal' AFTER 'oldVal';
@@ -1005,13 +815,7 @@ export const updateField = async (
         text: `ALTER TYPE ${fieldName} RENAME TO ${newFieldName};`,
         values: [],
       };
-      let response = await client.PerformQuery(query);
-      if (response.code !== 200) {
-        return responseHelper.ErrorResponse(
-          ErrorStatusCode.BadRequest,
-          `Failed to rename the enum ${fieldName}`
-        );
-      }
+      await client.PerformQuery(query);
     }
 
     // Get the possible values for the user defined enum.
@@ -1020,15 +824,8 @@ export const updateField = async (
       text: `SELECT unnest(enum_range(null::${newFieldName}));`,
       values: [],
     };
-    response = await client.PerformQuery(query);
-    if (response.code !== 200) {
-      return responseHelper.ErrorResponse(
-        ErrorStatusCode.BadRequest,
-        `User defined enum not found in database.`
-      );
-    }
-
-    let options = response.rows.map((row) => row.unnest);
+    let enumVals = await client.PerformQuery(query);
+    let options = enumVals.map((val) => val.unnest);
 
     // If there are no values or no new values, don't do anything.
     if (!fieldValues.options || options.length >= fieldValues.options.length) {
@@ -1045,13 +842,7 @@ export const updateField = async (
         fieldValues.options[i],
         fieldValues.options[i - 1]
       );
-      response = await client.PerformFormattedQuery(sql);
-      if (response.code !== 200) {
-        return responseHelper.ErrorResponse(
-          ErrorStatusCode.BadRequest,
-          `Couldn't add the value ${fieldValues.options[i]} to the enum ${newFieldName}`
-        );
-      }
+      await client.PerformFormattedQuery(sql);
     }
   }
 
@@ -1074,13 +865,7 @@ export const deleteField = async (
     text: `ALTER TABLE ${tabName} DROP COLUMN ${fieldName};`,
     values: [],
   };
-  let response = await client.PerformQuery(query);
-  if (response.code !== 200) {
-    return responseHelper.ErrorResponse(
-      ErrorStatusCode.BadRequest,
-      `Failed to delete the field ${fieldName}`
-    );
-  }
+  await client.PerformQuery(query);
 
   // Delete the metadata for that field.
   query = {
@@ -1088,13 +873,7 @@ export const deleteField = async (
     text: "DELETE FROM field_metadata WHERE tab_name=$1 AND field_name=$2;",
     values: [tabName, fieldName],
   };
-  response = await client.PerformQuery(query);
-  if (response.code !== 200) {
-    return responseHelper.ErrorResponse(
-      ErrorStatusCode.BadRequest,
-      `Failed to delete metadata for field ${fieldName}`
-    );
-  }
+  await client.PerformQuery(query);
 
   responseHelper.GenericResponse(HttpStatusCode.Ok);
 };

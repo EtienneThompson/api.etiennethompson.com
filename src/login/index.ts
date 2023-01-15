@@ -15,6 +15,7 @@ import {
   ResponseHelper,
   SuccessfulStatusCode,
 } from "../utils/response";
+import { User } from "../admin/types";
 
 export const loginHandler = async (
   req: Request,
@@ -34,19 +35,11 @@ export const loginHandler = async (
     text: "SELECT clientid, userid, session_expiration FROM users WHERE username=$1 AND password=$2;",
     values: [reqBody.username, reqBody.hashedPassword],
   };
-  let response = await client.PerformQuery(query);
-  if (response.code === 200 && response.rows.length > 0) {
-    const entry = response.rows[0] as UserEntry;
-    clientId = entry.clientid;
-    userId = entry.userid;
-    session_expiration = entry.session_expiration;
-  } else {
-    // No results, return an error message.
-    return responseHelper.ErrorResponse(
-      ErrorStatusCode.NotFound,
-      "That user doesn't exist."
-    );
-  }
+  let userRows: UserEntry[] = await client.PerformQuery(query);
+  const entry = userRows[0];
+  clientId = entry.clientid;
+  userId = entry.userid;
+  session_expiration = entry.session_expiration;
 
   // Verify the application exists and get the redirect url for that application.
   let redirectUrl: string = "";
@@ -55,27 +48,18 @@ export const loginHandler = async (
     text: "SELECT redirecturl FROM applications WHERE applicationid=$1;",
     values: [reqBody.appid],
   };
-  response = await client.PerformQuery(query);
-  if (response.code === 200 && response.rows.length > 0) {
-    let data = response.rows as ApplicationEntry[];
-    for (let i = 0; i < data.length; i++) {
-      const entry = data[i] as ApplicationEntry;
-      if (entry.redirecturl.indexOf(reqBody.redirectBase)) {
-        redirectUrl = entry.redirecturl;
-        break;
-      }
+  let redirectUrls: ApplicationEntry[] = await client.PerformQuery(query);
+  for (let i = 0; i < redirectUrls.length; i++) {
+    const entry = redirectUrls[i] as ApplicationEntry;
+    if (entry.redirecturl.indexOf(reqBody.redirectBase)) {
+      redirectUrl = entry.redirecturl;
+      break;
     }
-    if (redirectUrl === "") {
-      return responseHelper.ErrorResponse(
-        ErrorStatusCode.NotFound,
-        "Could not find matching redirect url for given base."
-      );
-    }
-  } else {
-    // No results, return an error message.
+  }
+  if (redirectUrl === "") {
     return responseHelper.ErrorResponse(
       ErrorStatusCode.NotFound,
-      "That application doesn't exist."
+      "Could not find matching redirect url for given base."
     );
   }
 
@@ -85,18 +69,18 @@ export const loginHandler = async (
     text: "SELECT isuser, isadmin FROM applicationusers WHERE userid=$1 AND applicationid=$2",
     values: [userId, reqBody.appid],
   };
-  response = await client.PerformQuery(query);
+  let userStatus: UserAdminStatus[] = await client.PerformQuery(query);
   let isUser: boolean = false;
   let isAdmin: boolean = false;
-  if (response.code !== 200 || response.rows.length === 0) {
+
+  if (userStatus.length === 0) {
     return responseHelper.ErrorResponse(
       ErrorStatusCode.NotFound,
       "That user is not a member of the given application."
     );
   } else {
-    const appUsers = response.rows[0] as UserAdminStatus;
-    isUser = appUsers.isuser;
-    isAdmin = appUsers.isadmin;
+    isUser = userStatus[0].isuser;
+    isAdmin = userStatus[0].isadmin;
   }
 
   // Check if the user has a currently valid clientid, if they do, get that
@@ -111,13 +95,7 @@ export const loginHandler = async (
       text: "UPDATE users SET clientid=$1, session_expiration=$2 WHERE userid=$3 RETURNING *;",
       values: [retClientId, expiration, userId],
     };
-    response = await client.PerformQuery(query);
-    if (response.code !== 200 || response.rows.length === 0) {
-      return responseHelper.ErrorResponse(
-        ErrorStatusCode.BadRequest,
-        "There was an unexpected error."
-      );
-    }
+    await client.PerformQuery(query);
   } else {
     // Use the existing clientId.
     retClientId = clientId;
@@ -126,13 +104,7 @@ export const loginHandler = async (
       text: "UPDATE users SET session_expiration=$1 WHERE userid=$2 RETURNING *;",
       values: [expiration, userId],
     };
-    response = await client.PerformQuery(query);
-    if (response.code != 200 || response.rows.length === 0) {
-      return responseHelper.ErrorResponse(
-        ErrorStatusCode.BadRequest,
-        "There was an unexpected error."
-      );
-    }
+    await client.PerformQuery(query);
   }
 
   responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
@@ -159,7 +131,7 @@ export const sendResetPasswordEmail = async (
     values: [email],
   };
   let response = await client.PerformQuery(query);
-  if (response.code !== 200 || response.rows.length === 0) {
+  if (response.length === 0) {
     return responseHelper.ErrorResponse(
       ErrorStatusCode.BadRequest,
       "Couldn't find a user with that email."
@@ -176,13 +148,7 @@ export const sendResetPasswordEmail = async (
     text: "UPDATE users SET reset_code=$1, reset_expiration=$2 WHERE email=$3;",
     values: [resetCode, expiration, email],
   };
-  response = await client.PerformQuery(query);
-  if (response.code !== 200) {
-    return responseHelper.ErrorResponse(
-      ErrorStatusCode.BadRequest,
-      "Failed to set the reset code and expiration."
-    );
-  }
+  await client.PerformQuery(query);
 
   // Send the email with the reset link.
   var link = `${process.env.SITE_URL}/reset_password?code=${resetCode}`;
@@ -241,13 +207,6 @@ export const changePassword = async (
     text: "UPDATE users SET password=$1, reset_code=NULL, reset_expiration=NULL WHERE reset_code=$2 AND reset_expiration>=$3 RETURNING user;",
     values: [newPassword, resetCode, currentTime],
   };
-  const response = await client.PerformQuery(query);
-  if (response.code !== 200 || response.rows.length === 0) {
-    return responseHelper.ErrorResponse(
-      ErrorStatusCode.BadRequest,
-      "Couldn't reset your password. the code might have expired."
-    );
-  }
-
+  await client.PerformQuery(query);
   responseHelper.GenericResponse(HttpStatusCode.Ok);
 };

@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { v4 as uuidv4 } from "uuid";
 import { QueryProps, DatabaseConnection } from "../../utils/database";
-import { ReturnApp } from "./types";
+import { Application, ReturnApp } from "../types";
 import { AdminGetResponseData, DefaultValues } from "../../types";
 import {
   ErrorStatusCode,
@@ -37,15 +37,7 @@ export const getApplications = async (
     text: "SELECT applicationid, applicationname, redirecturl FROM applications;",
     values: [],
   };
-  let response = await client.PerformQuery(query);
-  if (response.code !== 200 || response.rows.length === 0) {
-    return responseHelper.ErrorResponse(
-      ErrorStatusCode.BadRequest,
-      "Could not get application."
-    );
-  }
-
-  responseData.elements = response.rows;
+  responseData.elements = await client.PerformQuery(query);
 
   let allHeaders = [
     { text: "Application ID", field: "applicationid", type: "text" },
@@ -117,24 +109,16 @@ export const createApplication = async (
       newElement[2].value.toString(),
     ],
   };
-  const response = await client.PerformQuery(query);
+  await client.PerformQuery(query);
 
-  // Send appropriate data back to front end.
-  if (response.code === 200 && response.rows.length !== 0) {
-    let newApp: ReturnApp = {
-      applicationid: newAppId,
-      applicationname: newElement[1].value.toString(),
-      redirecturl: newElement[2].value.toString(),
-    };
-    responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
-      newElement: newApp,
-    });
-  } else {
-    return responseHelper.ErrorResponse(
-      ErrorStatusCode.BadRequest,
-      "Failed to create the application."
-    );
-  }
+  let newApp: ReturnApp = {
+    applicationid: newAppId,
+    applicationname: newElement[1].value.toString(),
+    redirecturl: newElement[2].value.toString(),
+  };
+  responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
+    newElement: newApp,
+  });
 };
 
 /**
@@ -163,24 +147,17 @@ export const updateApplication = async (
       updateElement[0].value.toString(),
     ],
   };
-  const response = await client.PerformQuery(query);
+  await client.PerformQuery(query);
 
   // Return the appropriate data.
-  if (response.code === 200 && response.rows.length !== 0) {
-    let udpatedApp: ReturnApp = {
-      applicationid: updateElement[0].value.toString(),
-      applicationname: updateElement[1].value.toString(),
-      redirecturl: updateElement[2].value.toString(),
-    };
-    responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
-      updatedElement: udpatedApp,
-    });
-  } else {
-    return responseHelper.ErrorResponse(
-      ErrorStatusCode.BadRequest,
-      "The application failed to update."
-    );
-  }
+  let udpatedApp: ReturnApp = {
+    applicationid: updateElement[0].value.toString(),
+    applicationname: updateElement[1].value.toString(),
+    redirecturl: updateElement[2].value.toString(),
+  };
+  responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
+    updatedElement: udpatedApp,
+  });
 };
 
 /**
@@ -204,9 +181,6 @@ export const deleteApplication = async (
     text: "DELETE FROM applications WHERE applicationid=$1;",
     values: [deleteElement[0].value.toString()],
   };
-  const response = await client.PerformQuery(query);
-  // Return the result of the query.
-  responseHelper.GenericResponse(
-    response.code === 200 ? HttpStatusCode.Ok : HttpStatusCode.BadRequest
-  );
+  await client.PerformQuery(query);
+  responseHelper.GenericResponse(HttpStatusCode.Ok);
 };

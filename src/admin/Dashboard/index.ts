@@ -5,7 +5,7 @@ import {
   ResponseHelper,
   SuccessfulStatusCode,
 } from "../../utils/response";
-import { TableNames, TableCount, CountData } from "./types";
+import { TableNames, TableCount, CountData } from "../types";
 
 /**
  * Gets the count of all database tables.
@@ -27,15 +27,7 @@ export const getTableCounts = async (
     text: "SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE';",
     values: [],
   };
-  let response = await client.PerformQuery(query);
-  if (response.code != 200) {
-    return responseHelper.ErrorResponse(
-      ErrorStatusCode.BadRequest,
-      "Could not get dashboard data."
-    );
-  }
-
-  let tables: TableNames[] = response.rows;
+  let tables: TableNames[] = await client.PerformQuery(query);
 
   let total = 0;
   let data: CountData = {
@@ -49,13 +41,11 @@ export const getTableCounts = async (
       text: `SELECT COUNT(*) FROM ${table.table_name}`,
       values: [],
     };
-    response = await client.PerformQuery(query);
-    if (response.code == 200) {
-      let count: TableCount = response.rows[0];
-      let countNum = parseInt(count.count);
-      total += countNum;
-      data.tables.push({ name: table.table_name, count: countNum });
-    }
+    let rows = await client.PerformQuery(query);
+    let count: TableCount = rows[0];
+    let countNum = parseInt(count.count);
+    total += countNum;
+    data.tables.push({ name: table.table_name, count: countNum });
   }
   data.total = total;
 

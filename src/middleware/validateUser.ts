@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from "express";
+import { ApplicationUser } from "../admin/types";
 import { BaseRequest, UserEntry } from "../types";
 import { QueryProps, DatabaseConnection } from "../utils/database";
 import { getCurrentTimeField } from "../utils/date";
@@ -38,8 +39,8 @@ export const validateUser = async (
     text: "SELECT userid, session_expiration FROM users WHERE clientid=$1;",
     values: [reqBody.clientid],
   };
-  let response = await client.PerformQuery(query);
-  if (response.code !== 200 || response.rows.length === 0) {
+  let userEntries: UserEntry[] = await client.PerformQuery(query);
+  if (userEntries.length === 0) {
     await closeDatabaseConnection(req);
     return responseHelper.Unauthorized(
       AuthenticationFailureReason.InvalidClientId,
@@ -48,9 +49,7 @@ export const validateUser = async (
   }
 
   // Validate that the clientid hasn't expired.
-  let session_expiration = new Date(
-    (response.rows[0] as UserEntry).session_expiration
-  );
+  let session_expiration = new Date(userEntries[0].session_expiration);
   let currentTime = new Date(getCurrentTimeField());
   let diff = session_expiration.getTime() - currentTime.getTime();
   if (diff < 0) {
@@ -61,16 +60,16 @@ export const validateUser = async (
     );
   }
 
-  let userid = (response.rows[0] as UserEntry).userid;
+  let userid = userEntries[0].userid;
 
   query = {
     name: "validateGetApplicationQuery",
     text: "SELECT * FROM applications WHERE applicationid=$1;",
     values: [reqBody.appid],
   };
-  response = await client.PerformQuery(query);
+  let apps = await client.PerformQuery(query);
 
-  if (response.code !== 200 || response.rows.length === 0) {
+  if (apps.length === 0) {
     await closeDatabaseConnection(req);
     return responseHelper.Unauthorized(
       AuthenticationFailureReason.InvalidAppId,
@@ -83,9 +82,9 @@ export const validateUser = async (
     text: "SELECT * FROM applicationusers WHERE applicationid=$1 AND userid=$2;",
     values: [reqBody.appid, userid],
   };
-  response = await client.PerformQuery(query);
+  let appUsers: ApplicationUser[] = await client.PerformQuery(query);
 
-  if (response.code !== 200 || response.rows.length === 0) {
+  if (appUsers.length === 0) {
     await closeDatabaseConnection(req);
     return responseHelper.Unauthorized(
       AuthenticationFailureReason.InvalidUser,
@@ -93,7 +92,7 @@ export const validateUser = async (
     );
   }
 
-  req.body.isMock = !(response.rows[0].isuser || response.rows[0].isadmin);
+  req.body.isMock = !(appUsers[0].isuser || appUsers[0].isadmin);
 
   next();
 };

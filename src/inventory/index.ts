@@ -13,9 +13,7 @@ import {
   FolderElement,
   ItemElement,
 } from "./types";
-import { QueryResponse } from "../types";
 import {
-  ErrorStatusCode,
   HttpStatusCode,
   ResponseHelper,
   SuccessfulStatusCode,
@@ -39,11 +37,8 @@ const getItemBreadcrumb = async (
     text: "SELECT itemid, name, parent_folder FROM items WHERE itemid=$1 AND owner=$2",
     values: [itemid, userid],
   };
-  let response = await client.PerformQuery(query);
-  if (response.code !== 200) {
-    return null;
-  }
-  let item: BreadcrumbItem = response.rows[0];
+  let rows = await client.PerformQuery(query);
+  let item: BreadcrumbItem = rows[0];
 
   // Get the breadcrumb trail for the parent folder.
   let breadcrumb = await getFolderBreadcrumb(
@@ -87,12 +82,9 @@ const getFolderBreadcrumb = async (
     text: "SELECT folderid, name, parent_folder FROM folders WHERE folderid=$1 AND owner=$2",
     values: [folderid, userid],
   };
-  let response = await client.PerformQuery(query);
-  if (response.code !== 200) {
-    return null;
-  }
+  let rows = await client.PerformQuery(query);
   // Add the breadcrumb information to the beginning of the array.
-  let folder: BreadcrumbFolder = response.rows[0];
+  let folder: BreadcrumbFolder = rows[0];
   breadcrumb.names.splice(0, 0, folder.name);
   breadcrumb.values.splice(0, 0, folder.folderid);
   breadcrumb.types.splice(0, 0, "folder");
@@ -101,11 +93,8 @@ const getFolderBreadcrumb = async (
   // the return data.
   while (folder.parent_folder) {
     query.values = [folder.parent_folder, userid];
-    response = await client.PerformQuery(query);
-    if (response.code !== 200) {
-      return null;
-    }
-    folder = response.rows[0];
+    let parentRows = await client.PerformQuery(query);
+    folder = parentRows[0];
     breadcrumb.names.splice(0, 0, folder.name);
     breadcrumb.values.splice(0, 0, folder.folderid);
     breadcrumb.types.splice(0, 0, "folder");
@@ -133,16 +122,14 @@ const getChildren = async (
     text: "SELECT folderid, name, picture FROM folders WHERE parent_folder=$1 AND owner=$2;",
     values: [folderid, userid],
   };
-  let response = await client.PerformQuery(query);
+  let childrenRows = await client.PerformQuery(query);
 
-  if (response.code === 200) {
-    let folderChildren = response.rows.map((child: FolderChildren) => {
-      child.type = "folder";
-      child.id = child.folderid;
-      return child;
-    });
-    children = children.concat(folderChildren);
-  }
+  let folderChildren = childrenRows.map((child: FolderChildren) => {
+    child.type = "folder";
+    child.id = child.folderid;
+    return child;
+  });
+  children = children.concat(folderChildren);
 
   // Get the children items.
   query = {
@@ -150,15 +137,13 @@ const getChildren = async (
     text: "SELECT itemid, name, picture FROM items WHERE parent_folder=$1 AND owner=$2;",
     values: [folderid, userid],
   };
-  response = await client.PerformQuery(query);
-  if (response.code === 200) {
-    let itemChildren = response.rows.map((child: FolderChildren) => {
-      child.type = ElementTypes.Item;
-      child.id = child.itemid;
-      return child;
-    });
-    children = children.concat(itemChildren);
-  }
+  childrenRows = await client.PerformQuery(query);
+  let itemChildren = childrenRows.map((child: FolderChildren) => {
+    child.type = ElementTypes.Item;
+    child.id = child.itemid;
+    return child;
+  });
+  children = children.concat(itemChildren);
 
   return children;
 };
@@ -193,18 +178,14 @@ const getImageUrl = async (
     };
   }
 
-  let response: QueryResponse;
+  let rows: any[];
   if (query) {
-    response = await client.PerformQuery(query);
+    rows = await client.PerformQuery(query);
   } else {
     return "";
   }
 
-  if (response.code === 200) {
-    return response.rows[0].picture as string;
-  } else {
-    return "";
-  }
+  return rows[0].picture as string;
 };
 
 /**
@@ -279,12 +260,6 @@ export const getBaseFolder = async (
   const responseHelper = req.body.response as ResponseHelper;
   let params = req.query;
   let userid = await client.GetUserId(params.clientid as string);
-  if (!userid) {
-    return responseHelper.ErrorResponse(
-      ErrorStatusCode.BadRequest,
-      "Could not get a user id for that client id."
-    );
-  }
   // Get the folder where the parent_folder is null, which is the base folder
   // of the inventory system for that user.
   let query: QueryProps = {
@@ -292,15 +267,9 @@ export const getBaseFolder = async (
     text: "SELECT folderid, name, picture FROM folders WHERE owner=$1 AND parent_folder is null;",
     values: [userid],
   };
-  const response = await client.PerformQuery(query);
-  if (response.code !== 200) {
-    return responseHelper.ErrorResponse(
-      ErrorStatusCode.NotFound,
-      "You have no root folder."
-    );
-  }
+  const folders = await client.PerformQuery(query);
 
-  let folderInfo = response.rows[0] as FolderElement;
+  let folderInfo = folders[0] as FolderElement;
   responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
     folder: folderInfo,
   });
@@ -322,27 +291,15 @@ export const getFolder = async (
   const responseHelper = req.body.response as ResponseHelper;
   let params = req.query;
   let userid = await client.GetUserId(params.clientid as string);
-  if (!userid) {
-    return responseHelper.ErrorResponse(
-      ErrorStatusCode.BadRequest,
-      "Could not get a user id for that client id."
-    );
-  }
+
   let folderid = params.folderid as string;
   let query: QueryProps = {
     name: "inventoryGetFolderQuery",
     text: "SELECT folderid, name, picture, description, parent_folder, created, updated FROM folders WHERE folderid=$1 AND owner=$2;",
     values: [folderid, userid],
   };
-  let response = await client.PerformQuery(query);
-
-  if (response.code !== 200) {
-    return responseHelper.ErrorResponse(
-      ErrorStatusCode.NotFound,
-      "That folder was not found."
-    );
-  }
-  let folderInfo = response.rows[0] as FolderElement;
+  let folders = await client.PerformQuery(query);
+  let folderInfo = folders[0] as FolderElement;
 
   // Get breadcrumb and children information for that folder.
   let breadcrumb = await getFolderBreadcrumb(client, userid, folderid);
@@ -379,31 +336,19 @@ export const getItem = async (
   const responseHelper = req.body.response as ResponseHelper;
   let params = req.query;
   let userid = await client.GetUserId(params.clientid as string);
-  if (!userid) {
-    return responseHelper.ErrorResponse(
-      ErrorStatusCode.BadRequest,
-      "Could not get a user id for that client id."
-    );
-  }
+
   let itemid = params.itemid as string;
   let query: QueryProps = {
     name: "inventoryGetItemQuery",
     text: "SELECT itemid, name, picture, description, parent_folder, created, updated FROM items WHERE itemid=$1 AND owner=$2;",
     values: [itemid, userid],
   };
-  let response = await client.PerformQuery(query);
-
-  if (response.code !== 200) {
-    return responseHelper.ErrorResponse(
-      ErrorStatusCode.NotFound,
-      "That item was not found."
-    );
-  }
+  let items = await client.PerformQuery(query);
 
   let breadcrumb = await getItemBreadcrumb(client, userid, itemid);
 
   // Update the fields appropriately.
-  let itemInfo = response.rows[0] as ItemElement;
+  let itemInfo = items[0] as ItemElement;
 
   // Convert the dates into readable times.
   if (itemInfo.created) {
@@ -436,13 +381,6 @@ export const getFolderChildren = async (
   let folderid = req.query.folderid as string;
   let userid = await client.GetUserId(clientid);
 
-  if (!userid) {
-    return responseHelper.ErrorResponse(
-      ErrorStatusCode.BadRequest,
-      "Could not get a user id for that client id."
-    );
-  }
-
   let children = await getChildren(client, userid, folderid);
   responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
     children: children,
@@ -463,17 +401,10 @@ export const createFolder = async (
 ) => {
   const client = req.body.client as DatabaseConnection;
   const responseHelper = req.body.response as ResponseHelper;
-  // insert into folders (folderid, name, description, owner, picture, parent_folder, created, updated) VALUES (...);
   const newFolder = req.body as CreateRequest;
   const clientid = req.body.clientid;
-
   let userid = await client.GetUserId(clientid);
-  if (!userid) {
-    return responseHelper.ErrorResponse(
-      ErrorStatusCode.BadRequest,
-      "Could not get a user id for that client id."
-    );
-  }
+
   // Generate unique id and current time for the other fields of a folder.
   let newFolderId = uuidv4();
   let currentTime = getCurrentTimeField();
@@ -499,24 +430,17 @@ export const createFolder = async (
       currentTime,
     ],
   };
-  let response = await client.PerformQuery(query);
+  await client.PerformQuery(query);
 
   // Send back the information required by the application for the created folder.
-  if (response.code === 200) {
-    responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
-      createdElement: {
-        id: newFolderId,
-        name: newFolder.name,
-        picture: imageUrl,
-        type: ElementTypes.Folder,
-      },
-    });
-  } else {
-    responseHelper.ErrorResponse(
-      ErrorStatusCode.BadRequest,
-      "Folder failed to be created."
-    );
-  }
+  responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
+    createdElement: {
+      id: newFolderId,
+      name: newFolder.name,
+      picture: imageUrl,
+      type: ElementTypes.Folder,
+    },
+  });
 };
 
 /**
@@ -533,17 +457,10 @@ export const createItem = async (
 ) => {
   const client = req.body.client as DatabaseConnection;
   const responseHelper = req.body.response as ResponseHelper;
-  // insert into items (itemid, name, description, picture, owner, parent_folder, created, updated) VALUES (...);
   const newItem = req.body as CreateRequest;
   const clientid = req.body.clientid as string;
-
   let userid = await client.GetUserId(clientid);
-  if (!userid) {
-    return responseHelper.ErrorResponse(
-      ErrorStatusCode.BadRequest,
-      "Could not get a user id for that client id."
-    );
-  }
+
   // Generate the unique id and current time for the other fields of the item.
   let newItemId = uuidv4();
   let currentTime = getCurrentTimeField();
@@ -569,25 +486,17 @@ export const createItem = async (
       currentTime,
     ],
   };
-  let response = await client.PerformQuery(query);
+  await client.PerformQuery(query);
 
   // Return useful information to the front end to update it's UI.
-  if (response.code === 200) {
-    responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
-      createdElement: {
-        id: newItemId,
-        name: newItem.name,
-        picture: imageUrl,
-        type: ElementTypes.Item,
-      },
-    });
-  } else {
-    responseHelper.ErrorResponse(
-      ErrorStatusCode.BadRequest,
-      "Item failed to be created."
-    );
-  }
-  next();
+  responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
+    createdElement: {
+      id: newItemId,
+      name: newItem.name,
+      picture: imageUrl,
+      type: ElementTypes.Item,
+    },
+  });
 };
 
 /**
@@ -609,12 +518,6 @@ export const updateFolder = async (
 
   // Construct query to get the current image uploaded for a folder.
   let userid = await client.GetUserId(clientid);
-  if (!userid) {
-    return responseHelper.ErrorResponse(
-      ErrorStatusCode.BadRequest,
-      "Could not get a user id for that client id."
-    );
-  }
   let currentPicture = await getImageUrl(
     client,
     userid,
@@ -668,23 +571,16 @@ export const updateFolder = async (
       ],
     };
   }
-  let response = await client.PerformQuery(query);
+  await client.PerformQuery(query);
 
   // Determine which picture to send to the user.
   let returnImageUrl = updatedImageUrl ? updatedImageUrl : currentPicture;
 
   // Send the updated information back to the user that they don't already have.
-  if (response.code !== 200) {
-    responseHelper.ErrorResponse(
-      ErrorStatusCode.BadRequest,
-      "Failed to update the folder."
-    );
-  } else {
-    responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
-      picture: returnImageUrl,
-      updated: createReadableTimeField(currentDate),
-    });
-  }
+  responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
+    picture: returnImageUrl,
+    updated: createReadableTimeField(currentDate),
+  });
 };
 
 /**
@@ -706,12 +602,6 @@ export const updateItem = async (
 
   // Get the current image url for the item.
   let userid = await client.GetUserId(clientid);
-  if (!userid) {
-    return responseHelper.ErrorResponse(
-      ErrorStatusCode.BadRequest,
-      "Could not get a user id for that client id."
-    );
-  }
   let currentPicture = await getImageUrl(
     client,
     userid,
@@ -764,23 +654,16 @@ export const updateItem = async (
       ],
     };
   }
-  let response = await client.PerformQuery(query);
+  await client.PerformQuery(query);
 
   // Determine what image to return.
   let returnImageUrl = updatedImageUrl ? updatedImageUrl : currentPicture;
 
   // Return information front end doesn't already have.
-  if (response.code !== 200) {
-    responseHelper.ErrorResponse(
-      ErrorStatusCode.BadRequest,
-      "Could not update the item."
-    );
-  } else {
-    responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
-      picture: returnImageUrl,
-      updated: createReadableTimeField(currentDate),
-    });
-  }
+  responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
+    picture: returnImageUrl,
+    updated: createReadableTimeField(currentDate),
+  });
 };
 
 /**
@@ -801,12 +684,6 @@ export const deleteFolder = async (
 
   // Get the current image url uploaded for the folder.
   let userid = await client.GetUserId(clientid);
-  if (!userid) {
-    return responseHelper.ErrorResponse(
-      ErrorStatusCode.BadRequest,
-      "Could not get a user id for that client id."
-    );
-  }
   let currentPicture = await getImageUrl(
     client,
     userid,
@@ -820,23 +697,12 @@ export const deleteFolder = async (
     text: "DELETE FROM folders WHERE folderid=$1 AND owner=$2;",
     values: [folderid, userid],
   };
-  let response = await client.PerformQuery(query);
+  await client.PerformQuery(query);
+  await deleteFile(currentPicture);
 
-  if (response.code === 200) {
-    // Only delete the file in AWS if deletion from database was successful.
-    await deleteFile(currentPicture);
-  }
-
-  if (response.code === 200) {
-    responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
-      message: "Folder was successfully deleted.",
-    });
-  } else {
-    responseHelper.ErrorResponse(
-      ErrorStatusCode.BadRequest,
-      "Failed to delete folder."
-    );
-  }
+  responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
+    message: "Folder was successfully deleted.",
+  });
 };
 
 /**
@@ -857,12 +723,6 @@ export const deleteItem = async (
 
   // Get the current image url uploaded for the item.
   let userid = await client.GetUserId(clientid);
-  if (!userid) {
-    return responseHelper.ErrorResponse(
-      ErrorStatusCode.BadRequest,
-      "Could not get a user id for that client id."
-    );
-  }
   let currentPicture = await getImageUrl(
     client,
     userid,
@@ -877,22 +737,11 @@ export const deleteItem = async (
     values: [itemid, userid],
   };
   let response = await client.PerformQuery(query);
+  await deleteFile(currentPicture);
 
-  if (response.code === 200) {
-    // Only delete the file in AWS if deletion from database was successful.
-    await deleteFile(currentPicture);
-  }
-
-  if (response.code === 200) {
-    responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
-      message: "Item was successfully deleted.",
-    });
-  } else {
-    responseHelper.ErrorResponse(
-      ErrorStatusCode.BadRequest,
-      "Failed to delete item."
-    );
-  }
+  responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
+    message: "Item was successfully deleted.",
+  });
 };
 
 /**
@@ -916,12 +765,6 @@ export const moveElement = async (
   const clientid: string = req.body.clientid;
 
   let userid = await client.GetUserId(clientid);
-  if (!userid) {
-    return responseHelper.ErrorResponse(
-      ErrorStatusCode.BadRequest,
-      "Could not get a user id for that client id."
-    );
-  }
   let query: QueryProps = { name: "", text: "", values: [] };
   // Construct the query for moving the item based on type.
   if (movingType === "folder") {
@@ -939,7 +782,5 @@ export const moveElement = async (
   }
   let response = await client.PerformQuery(query);
 
-  responseHelper.GenericResponse(
-    response.code === 200 ? HttpStatusCode.Ok : HttpStatusCode.BadRequest
-  );
+  responseHelper.GenericResponse(HttpStatusCode.Ok);
 };

@@ -6,7 +6,7 @@ import {
   ResponseHelper,
   SuccessfulStatusCode,
 } from "../../utils/response";
-import { ReturnUser } from "./types";
+import { ReturnUser } from "../types";
 
 export const mockGetUsers = (
   req: Request,

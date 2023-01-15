@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { QueryProps, DatabaseConnection } from "../../utils/database";
 import { AdminGetResponseData, DefaultValues } from "../../types";
-import { ApplicationUser, ReturnAppUser } from "./types";
+import { Application, ApplicationUser, ReturnAppUser, User } from "../types";
 import {
   ErrorStatusCode,
   HttpStatusCode,
@@ -37,14 +37,7 @@ export const getApplicationUsers = async (
     text: "SELECT userid, username FROM users;",
     values: [],
   };
-  let response = await client.PerformQuery(query);
-  if (response.code !== 200 || response.rows.length === 0) {
-    return responseHelper.ErrorResponse(
-      ErrorStatusCode.BadRequest,
-      "Could not get users."
-    );
-  }
-  let users = response.rows;
+  let userRows: User[] = await client.PerformQuery(query);
 
   // Get the list of all applications.
   query = {
@@ -52,14 +45,7 @@ export const getApplicationUsers = async (
     text: "SELECT applicationid, applicationname FROM applications;",
     values: [],
   };
-  response = await client.PerformQuery(query);
-  if (response.code !== 200 || response.rows.length === 0) {
-    return responseHelper.ErrorResponse(
-      ErrorStatusCode.BadRequest,
-      "Could not get applications."
-    );
-  }
-  let apps = response.rows;
+  let appRows: Application[] = await client.PerformQuery(query);
 
   // Get the list of all application users.
   query = {
@@ -67,21 +53,19 @@ export const getApplicationUsers = async (
     text: "SELECT userid, applicationid, isuser, isadmin FROM applicationusers;",
     values: [],
   };
-  response = await client.PerformQuery(query);
+  let appUsers: ApplicationUser[] = await client.PerformQuery(query);
 
   // Construct a list of all app users with actual usernames and app names.
-  if (response.code === 200) {
-    response.rows.map((row: ApplicationUser) => {
-      responseData.elements.push({
-        user: users.filter((user) => user.userid === row.userid)[0].username,
-        application: apps.filter(
-          (app) => app.applicationid === row.applicationid
-        )[0].applicationname,
-        isuser: row.isuser,
-        isadmin: row.isadmin,
-      });
+  appUsers.map((row) => {
+    responseData.elements.push({
+      user: userRows.filter((user) => user.userid === row.userid)[0].username,
+      application: appRows.filter(
+        (app) => app.applicationid === row.applicationid
+      )[0].applicationname,
+      isuser: row.isuser,
+      isadmin: row.isadmin,
     });
-  }
+  });
 
   let allHeaders = [
     { text: "User", field: "user", type: "select" },
@@ -122,14 +106,14 @@ export const getApplicationUsers = async (
       options:
         header.type === "select"
           ? header.field === "user"
-            ? users.map((user) => {
+            ? userRows.map((user) => {
                 return {
                   id: user.userid,
                   value: user.userid,
                   text: user.username,
                 };
               })
-            : apps.map((app) => {
+            : appRows.map((app) => {
                 return {
                   id: app.applicationid,
                   value: app.applicationid,
@@ -162,7 +146,7 @@ export const createApplicationUser = async (
   // Construct query to create the new application user.
   let query: QueryProps = {
     name: "appUserInsertQuery",
-    text: "INSERT INTO applicationusers (userid, applicationid, isuser, isadmin) VALUES ($1, $2, $3, $4);",
+    text: "INSERT INTO applicationusers (userid, applicationid, isuser, isadmin) VALUES ($1, $2, $3, $4) RETURNING *;",
     values: [
       newElement[0].value.toString(),
       newElement[1].value.toString(),
@@ -170,34 +154,25 @@ export const createApplicationUser = async (
       newElement[3].value.toString() === "true",
     ],
   };
-  const response = await client.PerformQuery(query);
+  await client.PerformQuery(query);
 
-  // Return data based on query code, setting the user and application based on
-  // the ids.
-  if (response.code === 200) {
-    let newAppUser: ReturnAppUser = {
-      user: newElement[0].options
-        ? newElement[0].options.filter(
-            (opt: any) => opt.id === newElement[0].value
-          )[0].text
-        : "",
-      application: newElement[1].options
-        ? newElement[1].options.filter(
-            (opt: any) => opt.id === newElement[1].value
-          )[0].text
-        : "",
-      isuser: newElement[2].value === "true",
-      isadmin: newElement[3].value === "true",
-    };
-    responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
-      newElement: newAppUser,
-    });
-  } else {
-    responseHelper.ErrorResponse(
-      ErrorStatusCode.BadRequest,
-      "Failed to create app user."
-    );
-  }
+  let newAppUser: ReturnAppUser = {
+    user: newElement[0].options
+      ? newElement[0].options.filter(
+          (opt: any) => opt.id === newElement[0].value
+        )[0].text
+      : "",
+    application: newElement[1].options
+      ? newElement[1].options.filter(
+          (opt: any) => opt.id === newElement[1].value
+        )[0].text
+      : "",
+    isuser: newElement[2].value === "true",
+    isadmin: newElement[3].value === "true",
+  };
+  responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
+    newElement: newAppUser,
+  });
 };
 
 /**
@@ -236,25 +211,17 @@ export const updateApplicationUser = async (
         : "",
     ],
   };
-  const response = await client.PerformQuery(query);
+  await client.PerformQuery(query);
 
-  // Send back the information based on code.
-  if (response.code === 200) {
-    let updateAppUser: ReturnAppUser = {
-      user: updateElement[0].value.toString(),
-      application: updateElement[1].value.toString(),
-      isuser: updateElement[2].value.toString() === "true",
-      isadmin: updateElement[3].value.toString() === "true",
-    };
-    responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
-      updatedElement: updateAppUser,
-    });
-  } else {
-    responseHelper.ErrorResponse(
-      ErrorStatusCode.BadRequest,
-      "The application user failed to update."
-    );
-  }
+  let updateAppUser: ReturnAppUser = {
+    user: updateElement[0].value.toString(),
+    application: updateElement[1].value.toString(),
+    isuser: updateElement[2].value.toString() === "true",
+    isadmin: updateElement[3].value.toString() === "true",
+  };
+  responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
+    updatedElement: updateAppUser,
+  });
 };
 
 /**
@@ -292,9 +259,6 @@ export const deleteApplicationUser = async (
     ],
   };
 
-  // Send back the result of the operation.
-  const response = await client.PerformQuery(query);
-  responseHelper.GenericResponse(
-    response.code === 200 ? HttpStatusCode.Ok : HttpStatusCode.BadRequest
-  );
+  await client.PerformQuery(query);
+  responseHelper.GenericResponse(HttpStatusCode.Ok);
 };

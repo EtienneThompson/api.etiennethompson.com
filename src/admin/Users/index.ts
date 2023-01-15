@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from "uuid";
 import { QueryProps, DatabaseConnection } from "../../utils/database";
 import { createHourExpiration } from "../../utils/date";
 import { AdminGetResponseData, DefaultValues } from "../../types";
-import { ReturnUser } from "./types";
+import { ReturnUser } from "../types";
 import {
   ErrorStatusCode,
   HttpStatusCode,
@@ -39,10 +39,7 @@ export const getUsers = async (
     text: "SELECT userid, username, email, clientid FROM users;",
     values: [],
   };
-  let response = await client.PerformQuery(query);
-  if (response.code === 200) {
-    responseData.elements = response.rows;
-  }
+  responseData.elements = await client.PerformQuery(query);
 
   // Every header.
   let allHeaders = [
@@ -123,25 +120,16 @@ export const createUser = async (
     ],
   };
 
-  const response = await client.PerformQuery(query);
-
-  // Return data to the front end based on response.
-  if (response.code === 200) {
-    let newUser: ReturnUser = {
-      userid: newUserId,
-      username: newElement[0].value.toString(),
-      email: newElement[2].value.toString(),
-      clientid: newClientId,
-    };
-    responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
-      newElement: newUser,
-    });
-  } else {
-    responseHelper.ErrorResponse(
-      ErrorStatusCode.BadRequest,
-      "Failed to create user."
-    );
-  }
+  await client.PerformQuery(query);
+  let newUser: ReturnUser = {
+    userid: newUserId,
+    username: newElement[0].value.toString(),
+    email: newElement[2].value.toString(),
+    clientid: newClientId,
+  };
+  responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
+    newElement: newUser,
+  });
 };
 
 /**
@@ -168,24 +156,16 @@ export const updateUser = async (
       updateElement[3].value.toString(),
     ],
   };
-  const response = await client.PerformQuery(query);
-
-  if (response.code === 200) {
-    let updateUser: ReturnUser = {
-      userid: updateElement[3].value.toString(),
-      username: updateElement[0].value.toString(),
-      email: updateElement[2].value.toString(),
-      clientid: updateElement[4].value.toString(),
-    };
-    responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
-      updatedElement: updateUser,
-    });
-  } else {
-    responseHelper.ErrorResponse(
-      ErrorStatusCode.BadRequest,
-      "The user failed to update."
-    );
-  }
+  await client.PerformQuery(query);
+  let updateUser: ReturnUser = {
+    userid: updateElement[3].value.toString(),
+    username: updateElement[0].value.toString(),
+    email: updateElement[2].value.toString(),
+    clientid: updateElement[4].value.toString(),
+  };
+  responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
+    updatedElement: updateUser,
+  });
 };
 
 /**
@@ -210,7 +190,5 @@ export const deleteUser = async (
     values: [deleteElement[3].value.toString()],
   };
   const response = await client.PerformQuery(query);
-  responseHelper.GenericResponse(
-    response.code === 200 ? HttpStatusCode.Ok : HttpStatusCode.BadRequest
-  );
+  responseHelper.GenericResponse(HttpStatusCode.Ok);
 };

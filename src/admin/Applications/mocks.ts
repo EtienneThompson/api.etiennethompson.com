@@ -6,7 +6,7 @@ import {
   ResponseHelper,
   SuccessfulStatusCode,
 } from "../../utils/response";
-import { ReturnApp } from "./types";
+import { ReturnApp } from "../types";
 
 export const mockGetApplications = async (
   req: Request,
