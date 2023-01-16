@@ -1,5 +1,4 @@
 import { Request, Response } from "express";
-import { Client } from "pg";
 import { DatabaseConnection } from "../utils/database";
 import { ResponseHelper } from "../utils/response";
 
@@ -9,9 +8,9 @@ const closeDatabaseConnectionInternal = async (req: Request) => {
   await client.Close();
 
   if (req.body.awsClient) {
-    const awsClient: Client = req.body.awsClient;
-    await client.Commit();
-    await awsClient.end();
+    const awsClient: DatabaseConnection = req.body.awsClient;
+    await awsClient.Commit();
+    await awsClient.Close();
   }
 };
 

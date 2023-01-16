@@ -39,9 +39,9 @@ const requestFactory = async (
       await real(req, res, next);
     } catch (error: any) {
       next(error);
+      return;
     }
   }
-  next();
 };
 
 const handleExceptions = async (next: NextFunction, tocall: () => void) => {
