@@ -27,11 +27,13 @@ export interface QueryProps {
 
 export class DatabaseConnection {
   client: Client | undefined;
+  isFinished: boolean;
   isOpen: boolean;
 
   constructor() {
     this.client = undefined;
     this.isOpen = false;
+    this.isFinished = false;
   }
 
   public async Initialize(
@@ -81,6 +83,7 @@ export class DatabaseConnection {
     }
 
     await this.client.end();
+    this.isFinished = true;
     this.isOpen = false;
   }
 
@@ -116,11 +119,17 @@ export class DatabaseConnection {
   }
 
   public async Commit(): Promise<void> {
-    await this.MakeSingleQuery("COMMIT");
+    if (!this.isFinished) {
+      await this.MakeSingleQuery("COMMIT");
+      this.isFinished = true;
+    }
   }
 
   public async Rollback(): Promise<void> {
-    await this.MakeSingleQuery("ROLLBACK");
+    if (!this.isFinished) {
+      await this.MakeSingleQuery("ROLLBACK");
+      this.isFinished = true;
+    }
   }
 
   private async MakeSingleQuery(query: QueryProps | string): Promise<any[]> {
