@@ -1,7 +1,7 @@
-import { Request, Response } from "express";
+import { Request, Response, NextFunction } from "express";
 import { v4 as uuidv4 } from "uuid";
 import aws from "aws-sdk";
-import { QueryProps, performQuery, getUserId } from "../utils/database";
+import { QueryProps, DatabaseConnection } from "../utils/database";
 import { getCurrentTimeField, createReadableTimeField } from "../utils/date";
 import {
   Breadcrumb,
@@ -13,6 +13,11 @@ import {
   FolderElement,
   ItemElement,
 } from "./types";
+import {
+  HttpStatusCode,
+  ResponseHelper,
+  SuccessfulStatusCode,
+} from "../utils/response";
 
 /**
  * Gets breadcrumb data for an item in the database.
@@ -22,7 +27,7 @@ import {
  * @returns The Breadcrumb data for that item or null if that item does not exist.
  */
 const getItemBreadcrumb = async (
-  client: any,
+  client: DatabaseConnection,
   userid: string,
   itemid: string
 ): Promise<Breadcrumb | null> => {
@@ -32,10 +37,7 @@ const getItemBreadcrumb = async (
     text: "SELECT itemid, name, parent_folder FROM items WHERE itemid=$1 AND owner=$2",
     values: [itemid, userid],
   };
-  let { code, rows } = await performQuery(client, query);
-  if (code !== 200) {
-    return null;
-  }
+  let rows = await client.PerformQuery(query);
   let item: BreadcrumbItem = rows[0];
 
   // Get the breadcrumb trail for the parent folder.
@@ -64,7 +66,7 @@ const getItemBreadcrumb = async (
  * @returns
  */
 const getFolderBreadcrumb = async (
-  client: any,
+  client: DatabaseConnection,
   userid: string,
   folderid: string
 ): Promise<Breadcrumb | null> => {
@@ -80,10 +82,7 @@ const getFolderBreadcrumb = async (
     text: "SELECT folderid, name, parent_folder FROM folders WHERE folderid=$1 AND owner=$2",
     values: [folderid, userid],
   };
-  let { code, rows } = await performQuery(client, query);
-  if (code !== 200) {
-    return null;
-  }
+  let rows = await client.PerformQuery(query);
   // Add the breadcrumb information to the beginning of the array.
   let folder: BreadcrumbFolder = rows[0];
   breadcrumb.names.splice(0, 0, folder.name);
@@ -94,11 +93,8 @@ const getFolderBreadcrumb = async (
   // the return data.
   while (folder.parent_folder) {
     query.values = [folder.parent_folder, userid];
-    ({ code, rows } = await performQuery(client, query));
-    if (code !== 200) {
-      return null;
-    }
-    folder = rows[0];
+    let parentRows = await client.PerformQuery(query);
+    folder = parentRows[0];
     breadcrumb.names.splice(0, 0, folder.name);
     breadcrumb.values.splice(0, 0, folder.folderid);
     breadcrumb.types.splice(0, 0, "folder");
@@ -115,7 +111,7 @@ const getFolderBreadcrumb = async (
  * @returns A list of all children elements.
  */
 const getChildren = async (
-  client: any,
+  client: DatabaseConnection,
   userid: string,
   folderid: string
 ): Promise<FolderChildren[]> => {
@@ -126,16 +122,14 @@ const getChildren = async (
     text: "SELECT folderid, name, picture FROM folders WHERE parent_folder=$1 AND owner=$2;",
     values: [folderid, userid],
   };
-  let { code, rows } = await performQuery(client, query);
+  let childrenRows = await client.PerformQuery(query);
 
-  if (code === 200) {
-    let folderChildren = rows.map((child: FolderChildren) => {
-      child.type = "folder";
-      child.id = child.folderid;
-      return child;
-    });
-    children = children.concat(folderChildren);
-  }
+  let folderChildren = childrenRows.map((child: FolderChildren) => {
+    child.type = "folder";
+    child.id = child.folderid;
+    return child;
+  });
+  children = children.concat(folderChildren);
 
   // Get the children items.
   query = {
@@ -143,15 +137,13 @@ const getChildren = async (
     text: "SELECT itemid, name, picture FROM items WHERE parent_folder=$1 AND owner=$2;",
     values: [folderid, userid],
   };
-  ({ code, rows } = await performQuery(client, query));
-  if (code === 200) {
-    let itemChildren = rows.map((child: FolderChildren) => {
-      child.type = ElementTypes.Item;
-      child.id = child.itemid;
-      return child;
-    });
-    children = children.concat(itemChildren);
-  }
+  childrenRows = await client.PerformQuery(query);
+  let itemChildren = childrenRows.map((child: FolderChildren) => {
+    child.type = ElementTypes.Item;
+    child.id = child.itemid;
+    return child;
+  });
+  children = children.concat(itemChildren);
 
   return children;
 };
@@ -165,7 +157,7 @@ const getChildren = async (
  * @returns The image url or an empty string.
  */
 const getImageUrl = async (
-  client: any,
+  client: DatabaseConnection,
   userid: string,
   elementId: string,
   elementType: ElementTypes
@@ -186,19 +178,14 @@ const getImageUrl = async (
     };
   }
 
-  let code: number;
   let rows: any[];
   if (query) {
-    ({ code, rows } = await performQuery(client, query));
+    rows = await client.PerformQuery(query);
   } else {
     return "";
   }
 
-  if (code === 200) {
-    return rows[0].picture as string;
-  } else {
-    return "";
-  }
+  return rows[0].picture as string;
 };
 
 /**
@@ -267,11 +254,12 @@ const deleteFile = async (imageUrl: string): Promise<void> => {
 export const getBaseFolder = async (
   req: Request,
   res: Response,
-  next: any
+  next: NextFunction
 ): Promise<void> => {
-  const client = req.body.client;
+  const client = req.body.client as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
   let params = req.query;
-  let userid = await getUserId(client, params.clientid as string);
+  let userid = await client.GetUserId(params.clientid as string);
   // Get the folder where the parent_folder is null, which is the base folder
   // of the inventory system for that user.
   let query: QueryProps = {
@@ -279,19 +267,12 @@ export const getBaseFolder = async (
     text: "SELECT folderid, name, picture FROM folders WHERE owner=$1 AND parent_folder is null;",
     values: [userid],
   };
-  const { code, rows } = await performQuery(client, query);
-  if (code !== 200) {
-    // The user's inventory system has not been initialized.
-    res.status(404);
-    res.write(JSON.stringify({ message: "You have no root folder." }));
-    next();
-    return;
-  }
+  const folders = await client.PerformQuery(query);
 
-  let folderInfo = rows[0] as FolderElement;
-  res.status(200);
-  res.write(JSON.stringify({ folder: folderInfo }));
-  next();
+  let folderInfo = folders[0] as FolderElement;
+  responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
+    folder: folderInfo,
+  });
 };
 
 /**
@@ -304,26 +285,21 @@ export const getBaseFolder = async (
 export const getFolder = async (
   req: Request,
   res: Response,
-  next: any
+  next: NextFunction
 ): Promise<void> => {
-  const client = req.body.client;
+  const client = req.body.client as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
   let params = req.query;
-  let userid = await getUserId(client, params.clientid as string);
+  let userid = await client.GetUserId(params.clientid as string);
+
   let folderid = params.folderid as string;
   let query: QueryProps = {
     name: "inventoryGetFolderQuery",
     text: "SELECT folderid, name, picture, description, parent_folder, created, updated FROM folders WHERE folderid=$1 AND owner=$2;",
     values: [folderid, userid],
   };
-  let { code, rows } = await performQuery(client, query);
-
-  if (code !== 200) {
-    res.status(404);
-    res.write(JSON.stringify({ message: "That folder was not found." }));
-    next();
-    return;
-  }
-  let folderInfo = rows[0] as FolderElement;
+  let folders = await client.PerformQuery(query);
+  let folderInfo = folders[0] as FolderElement;
 
   // Get breadcrumb and children information for that folder.
   let breadcrumb = await getFolderBreadcrumb(client, userid, folderid);
@@ -338,9 +314,10 @@ export const getFolder = async (
     folderInfo.updated = createReadableTimeField(new Date(folderInfo.updated));
   }
 
-  res.status(200);
-  res.write(JSON.stringify({ folder: folderInfo, breadcrumb: breadcrumb }));
-  next();
+  responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
+    folder: folderInfo,
+    breadcrumb: breadcrumb,
+  });
 };
 
 /**
@@ -353,30 +330,25 @@ export const getFolder = async (
 export const getItem = async (
   req: Request,
   res: Response,
-  next: any
+  next: NextFunction
 ): Promise<void> => {
-  const client = req.body.client;
+  const client = req.body.client as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
   let params = req.query;
-  let userid = await getUserId(client, params.clientid as string);
+  let userid = await client.GetUserId(params.clientid as string);
+
   let itemid = params.itemid as string;
   let query: QueryProps = {
     name: "inventoryGetItemQuery",
     text: "SELECT itemid, name, picture, description, parent_folder, created, updated FROM items WHERE itemid=$1 AND owner=$2;",
     values: [itemid, userid],
   };
-  let { code, rows } = await performQuery(client, query);
-
-  if (code !== 200) {
-    res.status(404);
-    res.write(JSON.stringify({ message: "That item was not found." }));
-    next();
-    return;
-  }
+  let items = await client.PerformQuery(query);
 
   let breadcrumb = await getItemBreadcrumb(client, userid, itemid);
 
   // Update the fields appropriately.
-  let itemInfo = rows[0] as ItemElement;
+  let itemInfo = items[0] as ItemElement;
 
   // Convert the dates into readable times.
   if (itemInfo.created) {
@@ -386,9 +358,10 @@ export const getItem = async (
     itemInfo.updated = createReadableTimeField(new Date(itemInfo.updated));
   }
 
-  res.status(200);
-  res.write(JSON.stringify({ item: itemInfo, breadcrumb: breadcrumb }));
-  next();
+  responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
+    item: itemInfo,
+    breadcrumb: breadcrumb,
+  });
 };
 
 /**
@@ -400,18 +373,18 @@ export const getItem = async (
 export const getFolderChildren = async (
   req: Request,
   res: Response,
-  next: any
+  next: NextFunction
 ) => {
-  const client = req.body.client;
+  const client = req.body.client as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
   let clientid = req.query.clientid as string;
   let folderid = req.query.folderid as string;
-  let userid = await getUserId(client, clientid);
+  let userid = await client.GetUserId(clientid);
 
   let children = await getChildren(client, userid, folderid);
-
-  res.status(200);
-  res.write(JSON.stringify({ children: children }));
-  next();
+  responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
+    children: children,
+  });
 };
 
 /**
@@ -421,13 +394,17 @@ export const getFolderChildren = async (
  * @param res The Express response object.
  * @param next The next function in the request lifecycle.
  */
-export const createFolder = async (req: Request, res: Response, next: any) => {
-  const client = req.body.client;
-  // insert into folders (folderid, name, description, owner, picture, parent_folder, created, updated) VALUES (...);
+export const createFolder = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  const client = req.body.client as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
   const newFolder = req.body as CreateRequest;
   const clientid = req.body.clientid;
+  let userid = await client.GetUserId(clientid);
 
-  let userid = await getUserId(client, clientid);
   // Generate unique id and current time for the other fields of a folder.
   let newFolderId = uuidv4();
   let currentTime = getCurrentTimeField();
@@ -453,26 +430,17 @@ export const createFolder = async (req: Request, res: Response, next: any) => {
       currentTime,
     ],
   };
-  let { code, rows } = await performQuery(client, query);
+  await client.PerformQuery(query);
 
   // Send back the information required by the application for the created folder.
-  if (code === 200) {
-    res.status(200);
-    res.write(
-      JSON.stringify({
-        createdElement: {
-          id: newFolderId,
-          name: newFolder.name,
-          picture: imageUrl,
-          type: "folder",
-        },
-      })
-    );
-  } else {
-    res.status(500);
-    res.write(JSON.stringify({ message: "Folder failed to be created." }));
-  }
-  next();
+  responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
+    createdElement: {
+      id: newFolderId,
+      name: newFolder.name,
+      picture: imageUrl,
+      type: ElementTypes.Folder,
+    },
+  });
 };
 
 /**
@@ -482,13 +450,17 @@ export const createFolder = async (req: Request, res: Response, next: any) => {
  * @param res The Express response object.
  * @param next The next function in the request lifecycle.
  */
-export const createItem = async (req: Request, res: Response, next: any) => {
-  const client = req.body.client;
-  // insert into items (itemid, name, description, picture, owner, parent_folder, created, updated) VALUES (...);
+export const createItem = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  const client = req.body.client as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
   const newItem = req.body as CreateRequest;
   const clientid = req.body.clientid as string;
+  let userid = await client.GetUserId(clientid);
 
-  let userid = await getUserId(client, clientid);
   // Generate the unique id and current time for the other fields of the item.
   let newItemId = uuidv4();
   let currentTime = getCurrentTimeField();
@@ -514,26 +486,17 @@ export const createItem = async (req: Request, res: Response, next: any) => {
       currentTime,
     ],
   };
-  let { code, rows } = await performQuery(client, query);
+  await client.PerformQuery(query);
 
   // Return useful information to the front end to update it's UI.
-  if (code === 200) {
-    res.status(200);
-    res.write(
-      JSON.stringify({
-        createdElement: {
-          id: newItemId,
-          name: newItem.name,
-          picture: imageUrl,
-          type: ElementTypes.Item,
-        },
-      })
-    );
-  } else {
-    res.status(500);
-    res.write(JSON.stringify({ message: "Item failed to be created." }));
-  }
-  next();
+  responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
+    createdElement: {
+      id: newItemId,
+      name: newItem.name,
+      picture: imageUrl,
+      type: ElementTypes.Item,
+    },
+  });
 };
 
 /**
@@ -543,13 +506,18 @@ export const createItem = async (req: Request, res: Response, next: any) => {
  * @param res The Express response object.
  * @param next The next function in the request lifecycle.
  */
-export const updateFolder = async (req: Request, res: Response, next: any) => {
-  const client = req.body.client;
+export const updateFolder = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  const client = req.body.client as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
   const clientid: string = req.body.clientid;
   var reqBody = req.body;
 
   // Construct query to get the current image uploaded for a folder.
-  let userid = await getUserId(client, clientid);
+  let userid = await client.GetUserId(clientid);
   let currentPicture = await getImageUrl(
     client,
     userid,
@@ -603,20 +571,16 @@ export const updateFolder = async (req: Request, res: Response, next: any) => {
       ],
     };
   }
-  let { code, rows } = await performQuery(client, query);
+  await client.PerformQuery(query);
 
   // Determine which picture to send to the user.
   let returnImageUrl = updatedImageUrl ? updatedImageUrl : currentPicture;
 
   // Send the updated information back to the user that they don't already have.
-  res.status(code);
-  res.write(
-    JSON.stringify({
-      picture: returnImageUrl,
-      updated: createReadableTimeField(currentDate),
-    })
-  );
-  next();
+  responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
+    picture: returnImageUrl,
+    updated: createReadableTimeField(currentDate),
+  });
 };
 
 /**
@@ -626,13 +590,18 @@ export const updateFolder = async (req: Request, res: Response, next: any) => {
  * @param res The Express response object.
  * @param next The next function in the request lifecycle.
  */
-export const updateItem = async (req: Request, res: Response, next: any) => {
-  const client = req.body.client;
+export const updateItem = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  const client = req.body.client as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
   const clientid: string = req.body.clientid;
   var reqBody = req.body;
 
   // Get the current image url for the item.
-  let userid = await getUserId(client, clientid);
+  let userid = await client.GetUserId(clientid);
   let currentPicture = await getImageUrl(
     client,
     userid,
@@ -685,20 +654,16 @@ export const updateItem = async (req: Request, res: Response, next: any) => {
       ],
     };
   }
-  let { code, rows } = await performQuery(client, query);
+  await client.PerformQuery(query);
 
   // Determine what image to return.
   let returnImageUrl = updatedImageUrl ? updatedImageUrl : currentPicture;
 
   // Return information front end doesn't already have.
-  res.status(code);
-  res.write(
-    JSON.stringify({
-      picture: returnImageUrl,
-      updated: createReadableTimeField(currentDate),
-    })
-  );
-  next();
+  responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
+    picture: returnImageUrl,
+    updated: createReadableTimeField(currentDate),
+  });
 };
 
 /**
@@ -707,13 +672,18 @@ export const updateItem = async (req: Request, res: Response, next: any) => {
  * @param res The Express response object.
  * @param next The next function in the request lifecycle.
  */
-export const deleteFolder = async (req: Request, res: Response, next: any) => {
-  const client = req.body.client;
+export const deleteFolder = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  const client = req.body.client as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
   const folderid: string = req.body.folderid;
   const clientid: string = req.body.clientid;
 
   // Get the current image url uploaded for the folder.
-  let userid = await getUserId(client, clientid);
+  let userid = await client.GetUserId(clientid);
   let currentPicture = await getImageUrl(
     client,
     userid,
@@ -727,21 +697,12 @@ export const deleteFolder = async (req: Request, res: Response, next: any) => {
     text: "DELETE FROM folders WHERE folderid=$1 AND owner=$2;",
     values: [folderid, userid],
   };
-  let { code, rows } = await performQuery(client, query);
+  await client.PerformQuery(query);
+  await deleteFile(currentPicture);
 
-  if (code === 200) {
-    // Only delete the file in AWS if deletion from database was successful.
-    await deleteFile(currentPicture);
-  }
-
-  if (code === 200) {
-    res.status(200);
-    res.write(JSON.stringify({ message: "Folder was successfully deleted." }));
-  } else {
-    res.status(500);
-    res.write(JSON.stringify({ message: "Failed to delete folder." }));
-  }
-  next();
+  responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
+    message: "Folder was successfully deleted.",
+  });
 };
 
 /**
@@ -750,13 +711,18 @@ export const deleteFolder = async (req: Request, res: Response, next: any) => {
  * @param res The Express response object.
  * @param next The next function in the request lifecycle.
  */
-export const deleteItem = async (req: Request, res: Response, next: any) => {
-  const client = req.body.client;
+export const deleteItem = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  const client = req.body.client as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
   const itemid: string = req.body.itemid;
   const clientid: string = req.body.clientid;
 
   // Get the current image url uploaded for the item.
-  let userid = await getUserId(client, clientid);
+  let userid = await client.GetUserId(clientid);
   let currentPicture = await getImageUrl(
     client,
     userid,
@@ -770,21 +736,12 @@ export const deleteItem = async (req: Request, res: Response, next: any) => {
     text: "DELETE FROM items WHERE itemid=$1 AND owner=$2;",
     values: [itemid, userid],
   };
-  let { code, rows } = await performQuery(client, query);
+  let response = await client.PerformQuery(query);
+  await deleteFile(currentPicture);
 
-  if (code === 200) {
-    // Only delete the file in AWS if deletion from database was successful.
-    await deleteFile(currentPicture);
-  }
-
-  if (code === 200) {
-    res.status(200);
-    res.write(JSON.stringify({ message: "Item was successfully deleted." }));
-  } else {
-    res.status(500);
-    res.write(JSON.stringify({ message: "Failed to delete item." }));
-  }
-  next();
+  responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
+    message: "Item was successfully deleted.",
+  });
 };
 
 /**
@@ -795,14 +752,19 @@ export const deleteItem = async (req: Request, res: Response, next: any) => {
  * @param res The Express response object.
  * @param next The next function in the request lifecycle.
  */
-export const moveElement = async (req: Request, res: Response, next: any) => {
-  const client = req.body.client;
+export const moveElement = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  const client = req.body.client as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
   const moveToId: string = req.body.moveToId;
   const movingId: string = req.body.movingId;
   const movingType: string = req.body.movingType;
   const clientid: string = req.body.clientid;
 
-  let userid = await getUserId(client, clientid);
+  let userid = await client.GetUserId(clientid);
   let query: QueryProps = { name: "", text: "", values: [] };
   // Construct the query for moving the item based on type.
   if (movingType === "folder") {
@@ -818,8 +780,7 @@ export const moveElement = async (req: Request, res: Response, next: any) => {
       values: [moveToId, movingId, userid],
     };
   }
-  let { code, rows } = await performQuery(client, query);
+  let response = await client.PerformQuery(query);
 
-  res.status(code);
-  next();
+  responseHelper.GenericResponse(HttpStatusCode.Ok);
 };

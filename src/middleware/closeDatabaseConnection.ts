@@ -1,13 +1,16 @@
 import { Request, Response } from "express";
-import { Client } from "pg";
+import { DatabaseConnection } from "../utils/database";
+import { ResponseHelper } from "../utils/response";
 
 const closeDatabaseConnectionInternal = async (req: Request) => {
-  const client: Client = req.body.client;
-  await client.end();
+  const client: DatabaseConnection = req.body.client;
+  await client.Commit();
+  await client.Close();
 
   if (req.body.awsClient) {
-    const awsClient: Client = req.body.awsClient;
-    await awsClient.end();
+    const awsClient: DatabaseConnection = req.body.awsClient;
+    await awsClient.Commit();
+    await awsClient.Close();
   }
 };
 
@@ -21,5 +24,6 @@ export const closeDatabaseConnectionMiddleware = async (
   next: any
 ) => {
   await closeDatabaseConnectionInternal(req);
-  res.end();
+  const responseHelper: ResponseHelper = req.body.response;
+  responseHelper.End();
 };

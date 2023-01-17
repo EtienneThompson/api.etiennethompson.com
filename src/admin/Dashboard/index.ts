@@ -1,6 +1,11 @@
-import { Request, Response } from "express";
-import { QueryProps, performQuery } from "../../utils/database";
-import { TableNames, TableCount, CountData } from "./types";
+import { Request, Response, NextFunction } from "express";
+import { QueryProps, DatabaseConnection } from "../../utils/database";
+import {
+  ErrorStatusCode,
+  ResponseHelper,
+  SuccessfulStatusCode,
+} from "../../utils/response";
+import { TableNames, TableCount, CountData } from "../types";
 
 /**
  * Gets the count of all database tables.
@@ -12,23 +17,17 @@ import { TableNames, TableCount, CountData } from "./types";
 export const getTableCounts = async (
   req: Request,
   res: Response,
-  next: any
+  next: NextFunction
 ): Promise<void> => {
-  const client = req.body.client;
+  const client = req.body.client as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
   // Query for all database table names in the database.
   let query: QueryProps = {
     name: "getTableNames",
     text: "SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE';",
     values: [],
   };
-  let { code, rows } = await performQuery(client, query);
-  if (code != 200) {
-    res.status(404);
-    next();
-    return;
-  }
-
-  let tables: TableNames[] = rows;
+  let tables: TableNames[] = await client.PerformQuery(query);
 
   let total = 0;
   let data: CountData = {
@@ -42,16 +41,13 @@ export const getTableCounts = async (
       text: `SELECT COUNT(*) FROM ${table.table_name}`,
       values: [],
     };
-    ({ code, rows } = await performQuery(client, query));
-    if (code == 200) {
-      let count: TableCount = rows[0];
-      let countNum = parseInt(count.count);
-      total += countNum;
-      data.tables.push({ name: table.table_name, count: countNum });
-    }
+    let rows = await client.PerformQuery(query);
+    let count: TableCount = rows[0];
+    let countNum = parseInt(count.count);
+    total += countNum;
+    data.tables.push({ name: table.table_name, count: countNum });
   }
   data.total = total;
 
-  res.status(200).write(JSON.stringify(data));
-  next();
+  responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, data);
 };

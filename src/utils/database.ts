@@ -1,67 +1,6 @@
 import { Client } from "pg";
 import { QueryResponse } from "../types";
 
-export const connectToDatabase = async (
-  connectionString: string
-): Promise<Client> => {
-  const client = new Client({
-    connectionString: connectionString,
-    ssl: {
-      rejectUnauthorized: false,
-    },
-  });
-
-  await client.connect();
-
-  return client;
-};
-
-export const connectToAWSDatabase = async (
-  host: string,
-  username: string,
-  password: string,
-  database: string,
-  port: number = 5432
-): Promise<Client> => {
-  const client = new Client({
-    host: host,
-    user: username,
-    password: password,
-    database: database,
-    port: port,
-  });
-
-  await client.connect();
-
-  return client;
-};
-
-export interface QueryProps {
-  name?: string;
-  text: string;
-  values: (string | boolean | number)[];
-}
-
-/**
- * Gets a user's id based on their clientid for future database interactions.
- * @param client The database client used to query.
- * @param clientid The client id that is passed to the API endpoint.
- * @returns The userid for that client id if it exists.
- */
-export const getUserId = async (
-  client: any,
-  clientid: string
-): Promise<string> => {
-  let query: QueryProps = {
-    name: "inventoryGetUserIdQuery",
-    text: "SELECT userid FROM users WHERE clientid=$1;",
-    values: [clientid],
-  };
-  let { code, rows } = await performQuery(client, query);
-  // The client id was verified in middleware, so this should always return a value.
-  return rows[0].userid as string;
-};
-
 /**
  * TODO: Perform the query, retrying on failed database connections.
  * @param client the database to perform the query on.
@@ -72,27 +11,6 @@ export const performQuery = async (
   client: Client,
   query: QueryProps
 ): Promise<QueryResponse> => {
-  const { code, rows } = await makeSingleQuery(client, query);
-  return { code, rows };
-};
-
-export const performFormattedQuery = async (
-  client: Client,
-  sql: string
-): Promise<QueryResponse> => {
-  return await makeSingleQuery(client, sql);
-};
-
-/**
- * Makes a single query and returns the results if there were any.
- * @param client the database to perform the query on.
- * @param query the query to perform.
- * @returns the results of the query, undefined if no results, and null if no response.
- */
-const makeSingleQuery = async (
-  client: Client,
-  query: QueryProps | string
-): Promise<QueryResponse> => {
   try {
     const response = await client.query(query);
     return { code: 200, rows: response.rows } as QueryResponse;
@@ -100,3 +18,132 @@ const makeSingleQuery = async (
     return { code: 400, rows: [] } as QueryResponse;
   }
 };
+
+export interface QueryProps {
+  name?: string;
+  text: string;
+  values: (string | boolean | number)[];
+}
+
+export class DatabaseConnection {
+  client: Client | undefined;
+  isFinished: boolean;
+  isOpen: boolean;
+
+  constructor() {
+    this.client = undefined;
+    this.isOpen = false;
+    this.isFinished = false;
+  }
+
+  public async Initialize(
+    host: string,
+    username: string,
+    password: string,
+    database: string,
+    port: number
+  ): Promise<void> {
+    this.client = new Client({
+      host: host,
+      user: username,
+      password: password,
+      database: database,
+      port: port,
+    });
+
+    await this.Connect();
+  }
+
+  public async InitializeByConnectionString(
+    connectionString: string
+  ): Promise<void> {
+    this.client = new Client({
+      connectionString: connectionString,
+      ssl: {
+        rejectUnauthorized: false,
+      },
+    });
+
+    await this.Connect();
+    this.isOpen = true;
+  }
+
+  public async Connect(): Promise<void> {
+    if (this.client === undefined) {
+      throw new Error("The client wasn't initialized.");
+    }
+
+    await this.client.connect();
+    this.isOpen = true;
+  }
+
+  public async Close(): Promise<void> {
+    if (this.client === undefined || !this.isOpen) {
+      throw new Error("The client wasn't initialized.");
+    }
+
+    await this.client.end();
+    this.isFinished = true;
+    this.isOpen = false;
+  }
+
+  public GetClient(): Client {
+    if (this.client === undefined) {
+      throw new Error("The client wasn't initialized.");
+    }
+
+    return this.client;
+  }
+
+  public async Begin(): Promise<void> {
+    await this.MakeSingleQuery("BEGIN");
+  }
+
+  public async PerformQuery(query: QueryProps): Promise<any[]> {
+    return await this.MakeSingleQuery(query);
+  }
+
+  public async PerformFormattedQuery(query: string): Promise<any[]> {
+    return await this.MakeSingleQuery(query);
+  }
+
+  public async GetUserId(clientid: string): Promise<string> {
+    let query: QueryProps = {
+      name: "inventoryGetUserIdQuery",
+      text: "SELECT userid FROM users WHERE clientid=$1;",
+      values: [clientid],
+    };
+    let rows = await this.MakeSingleQuery(query);
+    // The client id was verified in middleware, so this should always return a value.
+    return rows[0].userid as string;
+  }
+
+  public async Commit(): Promise<void> {
+    if (!this.isFinished) {
+      await this.MakeSingleQuery("COMMIT");
+      this.isFinished = true;
+    }
+  }
+
+  public async Rollback(): Promise<void> {
+    if (!this.isFinished) {
+      await this.MakeSingleQuery("ROLLBACK");
+      this.isFinished = true;
+    }
+  }
+
+  private async MakeSingleQuery(query: QueryProps | string): Promise<any[]> {
+    // Don't make the query if the client wasn't initialized or if the client
+    // connection has already been closed.
+    if (this.client === undefined || !this.isOpen) {
+      throw new Error("The client wasn't initialized.");
+    }
+
+    try {
+      const response = await this.client.query(query);
+      return response.rows;
+    } catch (error) {
+      throw error;
+    }
+  }
+}

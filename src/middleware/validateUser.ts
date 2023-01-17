@@ -1,23 +1,25 @@
-import { Request, Response } from "express";
+import { Request, Response, NextFunction } from "express";
+import { ApplicationUser } from "../admin/types";
 import { BaseRequest, UserEntry } from "../types";
-import { QueryProps, performQuery } from "../utils/database";
+import { QueryProps, DatabaseConnection } from "../utils/database";
 import { getCurrentTimeField } from "../utils/date";
+import {
+  AuthenticationFailureReason,
+  ResponseHelper,
+} from "../utils/response";
 import { closeDatabaseConnection } from "./closeDatabaseConnection";
 
-enum AuthenticationFailureReason {
-  InvalidArguments = 101,
-  InvalidClientId = 102,
-  ExpiredSession = 103,
-  InvalidAppId = 104,
-  InvalidUser = 105,
-}
-
-export const validateUser = async (req: Request, res: Response, next: any) => {
+export const validateUser = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   if (req.path.includes("/login")) {
     next();
     return;
   }
-  const client = req.body.client;
+  const client = req.body.client as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
 
   var reqBody = (
     req.body && req.body.clientid ? req.body : req.query
@@ -25,12 +27,10 @@ export const validateUser = async (req: Request, res: Response, next: any) => {
 
   if (!reqBody.clientid || !reqBody.appid) {
     await closeDatabaseConnection(req);
-    res.status(401).send({
-      reason: AuthenticationFailureReason.InvalidArguments,
-      message:
-        "You must provide both a Client ID and an Application ID to authenticate.",
-    });
-    return;
+    return responseHelper.Unauthorized(
+      AuthenticationFailureReason.InvalidArguments,
+      "You must provide both a Client ID and an Application ID to authenticate."
+    );
   }
 
   // Validate that the given clientid is a user.
@@ -39,45 +39,42 @@ export const validateUser = async (req: Request, res: Response, next: any) => {
     text: "SELECT userid, session_expiration FROM users WHERE clientid=$1;",
     values: [reqBody.clientid],
   };
-  let { code, rows } = await performQuery(client, query);
-  if (code !== 200 || rows.length === 0) {
+  let userEntries: UserEntry[] = await client.PerformQuery(query);
+  if (userEntries.length === 0) {
     await closeDatabaseConnection(req);
-    res.status(401).send({
-      reason: AuthenticationFailureReason.InvalidClientId,
-      message: "You are not a valid user of etiennethompson.com.",
-    });
-    return;
+    return responseHelper.Unauthorized(
+      AuthenticationFailureReason.InvalidClientId,
+      "You are not a valid user of etiennethompson.com"
+    );
   }
 
   // Validate that the clientid hasn't expired.
-  let session_expiration = new Date((rows[0] as UserEntry).session_expiration);
+  let session_expiration = new Date(userEntries[0].session_expiration);
   let currentTime = new Date(getCurrentTimeField());
   let diff = session_expiration.getTime() - currentTime.getTime();
   if (diff < 0) {
     await closeDatabaseConnection(req);
-    res.status(401).send({
-      reason: AuthenticationFailureReason.ExpiredSession,
-      message: "Your session has expired. Please login again.",
-    });
-    return;
+    return responseHelper.Unauthorized(
+      AuthenticationFailureReason.ExpiredSession,
+      "Your session has expired. Please login again."
+    );
   }
 
-  let userid = (rows[0] as UserEntry).userid;
+  let userid = userEntries[0].userid;
 
   query = {
     name: "validateGetApplicationQuery",
     text: "SELECT * FROM applications WHERE applicationid=$1;",
     values: [reqBody.appid],
   };
-  ({ code, rows } = await performQuery(client, query));
+  let apps = await client.PerformQuery(query);
 
-  if (code !== 200 || rows.length === 0) {
+  if (apps.length === 0) {
     await closeDatabaseConnection(req);
-    res.status(401).send({
-      reason: AuthenticationFailureReason.InvalidAppId,
-      message: "That is not a valid application of etiennethompson.com.",
-    });
-    return;
+    return responseHelper.Unauthorized(
+      AuthenticationFailureReason.InvalidAppId,
+      "That is not a valid application of etiennethompson.com"
+    );
   }
 
   query = {
@@ -85,18 +82,17 @@ export const validateUser = async (req: Request, res: Response, next: any) => {
     text: "SELECT * FROM applicationusers WHERE applicationid=$1 AND userid=$2;",
     values: [reqBody.appid, userid],
   };
-  ({ code, rows } = await performQuery(client, query));
+  let appUsers: ApplicationUser[] = await client.PerformQuery(query);
 
-  if (code !== 200 || rows.length === 0) {
+  if (appUsers.length === 0) {
     await closeDatabaseConnection(req);
-    res.status(401).send({
-      reason: AuthenticationFailureReason.InvalidUser,
-      message: "You are not a user of that application.",
-    });
-    return;
+    return responseHelper.Unauthorized(
+      AuthenticationFailureReason.InvalidUser,
+      "You are not a user of that application."
+    );
   }
 
-  req.body.isMock = !(rows[0].isuser || rows[0].isadmin);
+  req.body.isMock = !(appUsers[0].isuser || appUsers[0].isadmin);
 
   next();
 };

@@ -1,7 +1,4 @@
-import {
-  connectToAWSDatabase,
-  performFormattedQuery,
-} from "../utils/database";
+import { DatabaseConnection } from "../utils/database";
 import {
   createFieldName,
   getClientSchema,
@@ -19,14 +16,16 @@ const rename_columns = async () => {
     return;
   }
 
-  const client = await connectToAWSDatabase(
+  const client = new DatabaseConnection();
+  await client.Initialize(
     process.env.THOMPSON_ACCOUNTING_DATABASE_HOST,
     process.env.THOMPSON_ACCOUNTING_DATABASE_USER,
     process.env.THOMPSON_ACCOUNTING_DATABASE_PASSWORD,
-    process.env.THOMPSON_ACCOUNTING_DATABASE_DATABASE
+    process.env.THOMPSON_ACCOUNTING_DATABASE_DATABASE,
+    5432
   );
 
-  const clientSchema = await getClientSchema(client);
+  const clientSchema = await getClientSchema(client.GetClient());
 
   if (!clientSchema) {
     return;
@@ -39,28 +38,20 @@ const rename_columns = async () => {
       let sql = `ALTER TABLE ${tab.name} RENAME COLUMN ${field.name} TO ${newFieldName};`;
       console.log(sql);
 
-      let { code, rows } = await performFormattedQuery(client, sql);
-
-      if (code !== 200) {
-        console.log("ERROR!!!");
-      }
+      await client.PerformFormattedQuery(sql);
 
       if (field.type === "select") {
         let sql = `ALTER TYPE ${field.name} RENAME TO ${newFieldName};`;
         console.log(sql);
 
-        let { code, rows } = await performFormattedQuery(client, sql);
-
-        if (code !== 200) {
-          console.log("ERROR!!!!");
-        }
+        await client.PerformFormattedQuery(sql);
       }
 
       console.log();
     }
   }
 
-  await client.end();
+  await client.Commit();
 };
 
 rename_columns();

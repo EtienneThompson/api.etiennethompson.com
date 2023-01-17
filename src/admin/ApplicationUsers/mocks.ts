@@ -1,12 +1,16 @@
-import { Request, Response } from "express";
-import { v4 as uuidv4 } from "uuid";
+import { Request, Response, NextFunction } from "express";
 import { AdminGetResponseData, DefaultValues } from "../../types";
-import { ApplicationUser, ReturnAppUser } from "./types";
+import {
+  HttpStatusCode,
+  ResponseHelper,
+  SuccessfulStatusCode,
+} from "../../utils/response";
+import { ApplicationUser, ReturnAppUser } from "../types";
 
 export const mockGetApplicationUsers = async (
   req: Request,
   res: Response,
-  next: any
+  next: NextFunction
 ) => {
   // Template for all the data required.
   let responseData: AdminGetResponseData = {
@@ -16,6 +20,8 @@ export const mockGetApplicationUsers = async (
     newFields: [],
     defaultValues: [],
   };
+
+  const responseHelper = req.body.response as ResponseHelper;
 
   // Generate a random set of users.
   let users = [
@@ -140,14 +146,15 @@ export const mockGetApplicationUsers = async (
     });
   });
 
-  res.status(200).write(JSON.stringify(responseData));
+  responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, responseData);
 };
 
 export const mockCreateApplicationUser = async (
   req: Request,
   res: Response,
-  next: any
+  next: NextFunction
 ) => {
+  const response = req.body.response as ResponseHelper;
   const newElement = req.body.newElement as DefaultValues[];
   let newAppUser: ReturnAppUser = {
     user: newElement[0].options
@@ -163,14 +170,17 @@ export const mockCreateApplicationUser = async (
     isuser: newElement[2].value === "true",
     isadmin: newElement[3].value === "true",
   };
-  res.status(200).write(JSON.stringify({ newElement: newAppUser }));
+  response.SuccessfulResponse(SuccessfulStatusCode.Ok, {
+    newElement: newAppUser,
+  });
 };
 
 export const mockUpdateApplicationuser = async (
   req: Request,
   res: Response,
-  next: any
+  next: NextFunction
 ) => {
+  const responseHelper = req.body.response as ResponseHelper;
   var updateElement = req.body.updateElement as DefaultValues[];
   let updateAppUser: ReturnAppUser = {
     user: updateElement[0].value.toString(),
@@ -178,13 +188,16 @@ export const mockUpdateApplicationuser = async (
     isuser: updateElement[2].value.toString() === "true",
     isadmin: updateElement[3].value.toString() === "true",
   };
-  res.status(200).write(JSON.stringify({ updatedElement: updateAppUser }));
+  responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
+    updatedElement: updateAppUser,
+  });
 };
 
 export const mockDeleteApplicationUser = async (
   req: Request,
   res: Response,
-  next: any
+  next: NextFunction
 ) => {
-  res.status(200);
+  const responseHelper = req.body.response as ResponseHelper;
+  responseHelper.GenericResponse(HttpStatusCode.Ok);
 };

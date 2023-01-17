@@ -1,4 +1,4 @@
-import express, { Request, Response } from "express";
+import express, { Request, Response, NextFunction } from "express";
 import { exceptionLogging } from "./middleware/exceptionLogging";
 import { createDatabaseConnection } from "./middleware/createDatabaseConnection";
 import { closeDatabaseConnectionMiddleware } from "./middleware/closeDatabaseConnection";
@@ -28,16 +28,28 @@ const handler = (req: Request, res: Response) => {
 const requestFactory = async (
   req: Request,
   res: Response,
-  next: any,
-  real: (req: Request, res: Response, next: any) => void,
-  mock: (req: Request, res: Response, next: any) => void
+  next: NextFunction,
+  real: (req: Request, res: Response, next: NextFunction) => void,
+  mock: (req: Request, res: Response, next: NextFunction) => void
 ) => {
   if (req.body.isMock) {
     await mock(req, res, next);
   } else {
-    await real(req, res, next);
+    try {
+      await real(req, res, next);
+    } catch (error: any) {
+      next(error);
+      return;
+    }
   }
-  next();
+};
+
+const handleExceptions = async (next: NextFunction, tocall: () => void) => {
+  try {
+    await tocall();
+  } catch (error: any) {
+    next(error);
+  }
 };
 
 // Allow requests from these endpoints.
@@ -65,7 +77,6 @@ app.use(function (req, res, next) {
 
   next();
 });
-app.use(exceptionLogging);
 app.use(createDatabaseConnection);
 app.use(validateUser);
 
@@ -81,7 +92,7 @@ app.post("/login/reset", login.changePassword);
 app.get("/admin/dashboard/count", dashboard.getTableCounts);
 app.get(
   "/admin/users",
-  async (req: Request, res: Response, next: any) =>
+  async (req: Request, res: Response, next: NextFunction) =>
     await requestFactory(
       req,
       res,
@@ -92,7 +103,7 @@ app.get(
 );
 app.post(
   "/admin/users/create",
-  async (req: Request, res: Response, next: any) =>
+  async (req: Request, res: Response, next: NextFunction) =>
     await requestFactory(
       req,
       res,
@@ -103,7 +114,7 @@ app.post(
 );
 app.put(
   "/admin/users/update",
-  async (req: Request, res: Response, next: any) =>
+  async (req: Request, res: Response, next: NextFunction) =>
     await requestFactory(
       req,
       res,
@@ -114,7 +125,7 @@ app.put(
 );
 app.delete(
   "/admin/users/delete",
-  async (req: Request, res: Response, next: any) =>
+  async (req: Request, res: Response, next: NextFunction) =>
     await requestFactory(
       req,
       res,
@@ -127,7 +138,7 @@ app.delete(
 // Admin Applications routes.
 app.get(
   "/admin/applications",
-  async (req: Request, res: Response, next: any) =>
+  async (req: Request, res: Response, next: NextFunction) =>
     await requestFactory(
       req,
       res,
@@ -138,7 +149,7 @@ app.get(
 );
 app.post(
   "/admin/applications/create",
-  async (req: Request, res: Response, next: any) =>
+  async (req: Request, res: Response, next: NextFunction) =>
     await requestFactory(
       req,
       res,
@@ -149,7 +160,7 @@ app.post(
 );
 app.put(
   "/admin/applications/update",
-  async (req: Request, res: Response, next: any) =>
+  async (req: Request, res: Response, next: NextFunction) =>
     await requestFactory(
       req,
       res,
@@ -160,7 +171,7 @@ app.put(
 );
 app.delete(
   "/admin/applications/delete",
-  async (req: Request, res: Response, next: any) =>
+  async (req: Request, res: Response, next: NextFunction) =>
     await requestFactory(
       req,
       res,
@@ -173,7 +184,7 @@ app.delete(
 // Admin ApplicationUsers routes.
 app.get(
   "/admin/applicationusers",
-  async (req: Request, res: Response, next: any) =>
+  async (req: Request, res: Response, next: NextFunction) =>
     await requestFactory(
       req,
       res,
@@ -184,7 +195,7 @@ app.get(
 );
 app.post(
   "/admin/applicationusers/create",
-  async (req: Request, res: Response, next: any) =>
+  async (req: Request, res: Response, next: NextFunction) =>
     await requestFactory(
       req,
       res,
@@ -195,7 +206,7 @@ app.post(
 );
 app.put(
   "/admin/applicationusers/update",
-  async (req: Request, res: Response, next: any) =>
+  async (req: Request, res: Response, next: NextFunction) =>
     await requestFactory(
       req,
       res,
@@ -206,7 +217,7 @@ app.put(
 );
 app.delete(
   "/admin/applicationusers/delete",
-  async (req: Request, res: Response, next: any) =>
+  async (req: Request, res: Response, next: NextFunction) =>
     await requestFactory(
       req,
       res,
@@ -217,39 +228,96 @@ app.delete(
 );
 
 // Inventory routes.
-app.get("/inventory/folder", inventory.getFolder);
-app.get("/inventory/folder/children", inventory.getFolderChildren);
-app.post("/inventory/folder/create", inventory.createFolder);
-app.put("/inventory/folder/update", inventory.updateFolder);
-app.delete("/inventory/folder/delete", inventory.deleteFolder);
-app.get("/inventory/folder/base", inventory.getBaseFolder);
+app.get("/inventory/folder", (req, res, next) =>
+  handleExceptions(next, () => inventory.getFolder(req, res, next))
+);
+app.get("/inventory/folder/children", (req, res, next) =>
+  handleExceptions(next, () => inventory.getFolderChildren(req, res, next))
+);
+app.post("/inventory/folder/create", (req, res, next) =>
+  handleExceptions(next, () => inventory.createFolder(req, res, next))
+);
+app.put("/inventory/folder/update", (req, res, next) =>
+  handleExceptions(next, () => inventory.updateFolder(req, res, next))
+);
+app.delete("/inventory/folder/delete", (req, res, next) =>
+  handleExceptions(next, () => inventory.deleteFolder(req, res, next))
+);
+app.get("/inventory/folder/base", (req, res, next) =>
+  handleExceptions(next, () => inventory.getBaseFolder(req, res, next))
+);
 
-app.get("/inventory/item", inventory.getItem);
-app.post("/inventory/item/create", inventory.createItem);
-app.put("/inventory/item/update", inventory.updateItem);
-app.delete("/inventory/item/delete", inventory.deleteItem);
+app.get("/inventory/item", (req, res, next) =>
+  handleExceptions(next, () => inventory.getItem(req, res, next))
+);
+app.post("/inventory/item/create", (req, res, next) =>
+  handleExceptions(next, () => inventory.createItem(req, res, next))
+);
+app.put("/inventory/item/update", (req, res, next) =>
+  handleExceptions(next, () => inventory.updateItem(req, res, next))
+);
+app.delete("/inventory/item/delete", (req, res, next) =>
+  handleExceptions(next, () => inventory.deleteItem(req, res, next))
+);
 
-app.post("/inventory/move", inventory.moveElement);
+app.post("/inventory/move", (req, res, next) =>
+  handleExceptions(next, () => inventory.moveElement(req, res, next))
+);
 
 // Thompson Accounting routes.
-app.get("/thompsonaccounting/clients", accounting.getClientDetails);
-app.get("/thompsonaccounting/clients/new", accounting.getNewClientSchema);
-app.post("/thompsonaccounting/clients/new", accounting.postNewClientDetails);
-app.put("/thompsonaccounting/clients", accounting.updateClientDetails);
-app.delete("/thompsonaccounting/clients", accounting.deleteClient);
-app.get("/thompsonaccounting/tabs", accounting.getAllTabs);
-app.post("/thompsonaccounting/tabs", accounting.createTab);
-app.put("/thompsonaccounting/tabs", accounting.updateTabName);
-app.delete("/thompsonaccounting/tabs", accounting.deleteTab);
-app.get("/thompsonaccounting/field", accounting.getFieldsForTab);
-app.get("/thompsonaccounting/field/schema", accounting.getFieldSchema);
-app.get("/thompsonaccounting/allfields", accounting.getAllFields);
-app.get("/thompsonaccounting/fields/metadata", accounting.getFieldsMetadata);
-app.post("/thompsonaccounting/fields/metadata", accounting.reorderFields);
-app.post("/thompsonaccounting/fields", accounting.createField);
-app.put("/thompsonaccounting/field", accounting.updateField);
-app.delete("/thompsonaccounting/field", accounting.deleteField);
+app.get("/thompsonaccounting/clients", (req, res, next) =>
+  handleExceptions(next, () => accounting.getClientDetails(req, res, next))
+);
+app.get("/thompsonaccounting/clients/new", (req, res, next) =>
+  handleExceptions(next, () => accounting.getNewClientSchema(req, res, next))
+);
+app.post("/thompsonaccounting/clients/new", (req, res, next) =>
+  handleExceptions(next, () => accounting.postNewClientDetails(req, res, next))
+);
+app.put("/thompsonaccounting/clients", (req, res, next) =>
+  handleExceptions(next, () => accounting.updateClientDetails(req, res, next))
+);
+app.delete("/thompsonaccounting/clients", (req, res, next) =>
+  handleExceptions(next, () => accounting.deleteClient(req, res, next))
+);
+app.get("/thompsonaccounting/tabs", (req, res, next) =>
+  handleExceptions(next, () => accounting.getAllTabs(req, res, next))
+);
+app.post("/thompsonaccounting/tabs", (req, res, next) =>
+  handleExceptions(next, () => accounting.createTab(req, res, next))
+);
+app.put("/thompsonaccounting/tabs", (req, res, next) =>
+  handleExceptions(next, () => accounting.updateTabName(req, res, next))
+);
+app.delete("/thompsonaccounting/tabs", (req, res, next) =>
+  handleExceptions(next, () => accounting.deleteTab(req, res, next))
+);
+app.get("/thompsonaccounting/field", (req, res, next) =>
+  handleExceptions(next, () => accounting.getFieldsForTab(req, res, next))
+);
+app.get("/thompsonaccounting/field/schema", (req, res, next) =>
+  handleExceptions(next, () => accounting.getFieldSchema(req, res, next))
+);
+app.get("/thompsonaccounting/allfields", (req, res, next) =>
+  handleExceptions(next, () => accounting.getAllFields(req, res, next))
+);
+app.get("/thompsonaccounting/fields/metadata", (req, res, next) =>
+  handleExceptions(next, () => accounting.getFieldsMetadata(req, res, next))
+);
+app.post("/thompsonaccounting/fields/metadata", (req, res, next) =>
+  handleExceptions(next, () => accounting.reorderFields(req, res, next))
+);
+app.post("/thompsonaccounting/fields", (req, res, next) =>
+  handleExceptions(next, () => accounting.createField(req, res, next))
+);
+app.put("/thompsonaccounting/field", (req, res, next) =>
+  handleExceptions(next, () => accounting.updateField(req, res, next))
+);
+app.delete("/thompsonaccounting/field", (req, res, next) =>
+  handleExceptions(next, () => accounting.deleteField(req, res, next))
+);
 
+app.use(exceptionLogging);
 app.use(closeDatabaseConnectionMiddleware);
 
 app.listen(port, () => {

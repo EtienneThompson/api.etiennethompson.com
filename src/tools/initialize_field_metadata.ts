@@ -2,10 +2,7 @@ import {
   createFieldName,
   getClientSchema,
 } from "../thompsonaccounting/helpers";
-import {
-  connectToAWSDatabase,
-  performFormattedQuery,
-} from "../utils/database";
+import { DatabaseConnection } from "../utils/database";
 import { v4 as uuidv4 } from "uuid";
 
 require("dotenv").config({ path: `./.env.local` });
@@ -20,14 +17,16 @@ const initializeFieldMetadata = async () => {
     return;
   }
 
-  const client = await connectToAWSDatabase(
+  const client = new DatabaseConnection();
+  await client.Initialize(
     process.env.THOMPSON_ACCOUNTING_DATABASE_HOST,
     process.env.THOMPSON_ACCOUNTING_DATABASE_USER,
     process.env.THOMPSON_ACCOUNTING_DATABASE_PASSWORD,
-    process.env.THOMPSON_ACCOUNTING_DATABASE_DATABASE
+    process.env.THOMPSON_ACCOUNTING_DATABASE_DATABASE,
+    5432
   );
 
-  const clientSchema = await getClientSchema(client);
+  const clientSchema = await getClientSchema(client.GetClient());
 
   if (!clientSchema) {
     return;
@@ -41,14 +40,8 @@ const initializeFieldMetadata = async () => {
 
       let sql = `INSERT INTO field_metadata (metadata_id, tab_name, field_name, position) VALUES ('${metadataId}', '${tab.name}', '${fieldName}', ${position}) RETURNING *;`;
       console.log(sql);
-
-      let { code, rows } = await performFormattedQuery(client, sql);
-      if (code !== 200 || rows.length === 0) {
-        console.log("ERROR!!!");
-      }
-
+      await client.PerformFormattedQuery(sql);
       console.log();
-
       position++;
     }
   }

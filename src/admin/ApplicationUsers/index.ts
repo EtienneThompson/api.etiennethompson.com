@@ -1,7 +1,13 @@
-import { Request, Response } from "express";
-import { QueryProps, performQuery } from "../../utils/database";
+import { Request, Response, NextFunction } from "express";
+import { QueryProps, DatabaseConnection } from "../../utils/database";
 import { AdminGetResponseData, DefaultValues } from "../../types";
-import { ApplicationUser, ReturnAppUser } from "./types";
+import { Application, ApplicationUser, ReturnAppUser, User } from "../types";
+import {
+  ErrorStatusCode,
+  HttpStatusCode,
+  ResponseHelper,
+  SuccessfulStatusCode,
+} from "../../utils/response";
 
 /**
  * Gets a list of all application users.
@@ -12,7 +18,7 @@ import { ApplicationUser, ReturnAppUser } from "./types";
 export const getApplicationUsers = async (
   req: Request,
   res: Response,
-  next: any
+  next: NextFunction
 ) => {
   // Template for all the data required.
   let responseData: AdminGetResponseData = {
@@ -22,7 +28,8 @@ export const getApplicationUsers = async (
     newFields: [],
     defaultValues: [],
   };
-  const client = req.body.client;
+  const client = req.body.client as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
 
   // Get the list of all users.
   let query: QueryProps = {
@@ -30,11 +37,7 @@ export const getApplicationUsers = async (
     text: "SELECT userid, username FROM users;",
     values: [],
   };
-  let users: any[] = [];
-  let { code, rows } = await performQuery(client, query);
-  if (code === 200) {
-    users = rows;
-  }
+  let userRows: User[] = await client.PerformQuery(query);
 
   // Get the list of all applications.
   query = {
@@ -42,11 +45,7 @@ export const getApplicationUsers = async (
     text: "SELECT applicationid, applicationname FROM applications;",
     values: [],
   };
-  let apps: any[] = [];
-  ({ code, rows } = await performQuery(client, query));
-  if (code === 200) {
-    apps = rows;
-  }
+  let appRows: Application[] = await client.PerformQuery(query);
 
   // Get the list of all application users.
   query = {
@@ -54,21 +53,19 @@ export const getApplicationUsers = async (
     text: "SELECT userid, applicationid, isuser, isadmin FROM applicationusers;",
     values: [],
   };
-  ({ code, rows } = await performQuery(client, query));
+  let appUsers: ApplicationUser[] = await client.PerformQuery(query);
 
   // Construct a list of all app users with actual usernames and app names.
-  if (code === 200) {
-    rows.map((row: ApplicationUser) => {
-      responseData.elements.push({
-        user: users.filter((user) => user.userid === row.userid)[0].username,
-        application: apps.filter(
-          (app) => app.applicationid === row.applicationid
-        )[0].applicationname,
-        isuser: row.isuser,
-        isadmin: row.isadmin,
-      });
+  appUsers.map((row) => {
+    responseData.elements.push({
+      user: userRows.filter((user) => user.userid === row.userid)[0].username,
+      application: appRows.filter(
+        (app) => app.applicationid === row.applicationid
+      )[0].applicationname,
+      isuser: row.isuser,
+      isadmin: row.isadmin,
     });
-  }
+  });
 
   let allHeaders = [
     { text: "User", field: "user", type: "select" },
@@ -109,14 +106,14 @@ export const getApplicationUsers = async (
       options:
         header.type === "select"
           ? header.field === "user"
-            ? users.map((user) => {
+            ? userRows.map((user) => {
                 return {
                   id: user.userid,
                   value: user.userid,
                   text: user.username,
                 };
               })
-            : apps.map((app) => {
+            : appRows.map((app) => {
                 return {
                   id: app.applicationid,
                   value: app.applicationid,
@@ -127,7 +124,7 @@ export const getApplicationUsers = async (
     });
   });
 
-  res.status(200).write(JSON.stringify(responseData));
+  responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, responseData);
 };
 
 /**
@@ -140,15 +137,16 @@ export const getApplicationUsers = async (
 export const createApplicationUser = async (
   req: Request,
   res: Response,
-  next: any
+  next: NextFunction
 ) => {
-  const client = req.body.client;
+  const client = req.body.client as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
   const newElement = req.body.newElement as DefaultValues[];
 
   // Construct query to create the new application user.
   let query: QueryProps = {
     name: "appUserInsertQuery",
-    text: "INSERT INTO applicationusers (userid, applicationid, isuser, isadmin) VALUES ($1, $2, $3, $4);",
+    text: "INSERT INTO applicationusers (userid, applicationid, isuser, isadmin) VALUES ($1, $2, $3, $4) RETURNING *;",
     values: [
       newElement[0].value.toString(),
       newElement[1].value.toString(),
@@ -156,31 +154,25 @@ export const createApplicationUser = async (
       newElement[3].value.toString() === "true",
     ],
   };
-  const { code, rows } = await performQuery(client, query);
+  await client.PerformQuery(query);
 
-  // Return data based on query code, setting the user and application based on
-  // the ids.
-  if (code === 200) {
-    let newAppUser: ReturnAppUser = {
-      user: newElement[0].options
-        ? newElement[0].options.filter(
-            (opt: any) => opt.id === newElement[0].value
-          )[0].text
-        : "",
-      application: newElement[1].options
-        ? newElement[1].options.filter(
-            (opt: any) => opt.id === newElement[1].value
-          )[0].text
-        : "",
-      isuser: newElement[2].value === "true",
-      isadmin: newElement[3].value === "true",
-    };
-    res.status(200).write(JSON.stringify({ newElement: newAppUser }));
-  } else {
-    res
-      .status(500)
-      .write(JSON.stringify({ message: "Failed to create app user. " }));
-  }
+  let newAppUser: ReturnAppUser = {
+    user: newElement[0].options
+      ? newElement[0].options.filter(
+          (opt: any) => opt.id === newElement[0].value
+        )[0].text
+      : "",
+    application: newElement[1].options
+      ? newElement[1].options.filter(
+          (opt: any) => opt.id === newElement[1].value
+        )[0].text
+      : "",
+    isuser: newElement[2].value === "true",
+    isadmin: newElement[3].value === "true",
+  };
+  responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
+    newElement: newAppUser,
+  });
 };
 
 /**
@@ -193,9 +185,10 @@ export const createApplicationUser = async (
 export const updateApplicationUser = async (
   req: Request,
   res: Response,
-  next: any
+  next: NextFunction
 ) => {
-  const client = req.body.client;
+  const client = req.body.client as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
   var updateElement = req.body.updateElement as DefaultValues[];
 
   // Construct the query, filtering the given user and application for their
@@ -218,24 +211,17 @@ export const updateApplicationUser = async (
         : "",
     ],
   };
-  const { code, rows } = await performQuery(client, query);
+  await client.PerformQuery(query);
 
-  // Send back the information based on code.
-  if (code === 200) {
-    let updateAppUser: ReturnAppUser = {
-      user: updateElement[0].value.toString(),
-      application: updateElement[1].value.toString(),
-      isuser: updateElement[2].value.toString() === "true",
-      isadmin: updateElement[3].value.toString() === "true",
-    };
-    res.status(200).write(JSON.stringify({ updatedElement: updateAppUser }));
-  } else {
-    res
-      .status(500)
-      .write(
-        JSON.stringify({ message: "The application user failed to update." })
-      );
-  }
+  let updateAppUser: ReturnAppUser = {
+    user: updateElement[0].value.toString(),
+    application: updateElement[1].value.toString(),
+    isuser: updateElement[2].value.toString() === "true",
+    isadmin: updateElement[3].value.toString() === "true",
+  };
+  responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
+    updatedElement: updateAppUser,
+  });
 };
 
 /**
@@ -248,9 +234,10 @@ export const updateApplicationUser = async (
 export const deleteApplicationUser = async (
   req: Request,
   res: Response,
-  next: any
+  next: NextFunction
 ) => {
-  const client = req.body.client;
+  const client = req.body.client as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
   var deleteElement = req.body.deleteElement as DefaultValues[];
 
   // Construct the query, replacing the user and application fields with their
@@ -272,7 +259,6 @@ export const deleteApplicationUser = async (
     ],
   };
 
-  // Send back the result of the operation.
-  const { code, rows } = await performQuery(client, query);
-  res.status(code);
+  await client.PerformQuery(query);
+  responseHelper.GenericResponse(HttpStatusCode.Ok);
 };

@@ -1,8 +1,14 @@
-import { Request, Response } from "express";
+import { Request, Response, NextFunction } from "express";
 import { v4 as uuidv4 } from "uuid";
-import { QueryProps, performQuery } from "../../utils/database";
-import { ReturnApp } from "./types";
+import { QueryProps, DatabaseConnection } from "../../utils/database";
+import { Application, ReturnApp } from "../types";
 import { AdminGetResponseData, DefaultValues } from "../../types";
+import {
+  ErrorStatusCode,
+  HttpStatusCode,
+  ResponseHelper,
+  SuccessfulStatusCode,
+} from "../../utils/response";
 
 /**
  * Gets a list of all applications in the database.
@@ -13,7 +19,7 @@ import { AdminGetResponseData, DefaultValues } from "../../types";
 export const getApplications = async (
   req: Request,
   res: Response,
-  next: any
+  next: NextFunction
 ) => {
   // Get template for all of the data that will be required.
   let responseData: AdminGetResponseData = {
@@ -24,16 +30,14 @@ export const getApplications = async (
     defaultValues: [],
   };
   // Get list of the application fields.
-  const client = req.body.client;
+  const client = req.body.client as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
   let query: QueryProps = {
     name: "applicationGetQuery",
     text: "SELECT applicationid, applicationname, redirecturl FROM applications;",
     values: [],
   };
-  let { code, rows } = await performQuery(client, query);
-  if (code === 200) {
-    responseData.elements = rows;
-  }
+  responseData.elements = await client.PerformQuery(query);
 
   let allHeaders = [
     { text: "Application ID", field: "applicationid", type: "text" },
@@ -70,7 +74,10 @@ export const getApplications = async (
     });
   });
 
-  res.status(200).write(JSON.stringify(responseData));
+  return responseHelper.SuccessfulResponse(
+    SuccessfulStatusCode.Ok,
+    responseData
+  );
 };
 
 /**
@@ -83,9 +90,10 @@ export const getApplications = async (
 export const createApplication = async (
   req: Request,
   res: Response,
-  next: any
+  next: NextFunction
 ) => {
-  const client = req.body.client;
+  const client = req.body.client as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
   const newElement = req.body.newElement as DefaultValues[];
 
   // Generate a new application id.
@@ -94,28 +102,23 @@ export const createApplication = async (
   // Construct the query to create the application.
   let query: QueryProps = {
     name: "appInsertQuery",
-    text: "INSERT INTO applications (applicationid, applicationname, redirecturl) VALUES ($1, $2, $3);",
+    text: "INSERT INTO applications (applicationid, applicationname, redirecturl) VALUES ($1, $2, $3) RETURNING *;",
     values: [
       newAppId,
       newElement[1].value.toString(),
       newElement[2].value.toString(),
     ],
   };
-  const { code, rows } = await performQuery(client, query);
+  await client.PerformQuery(query);
 
-  // Send appropriate data back to front end.
-  if (code === 200) {
-    let newApp: ReturnApp = {
-      applicationid: newAppId,
-      applicationname: newElement[1].value.toString(),
-      redirecturl: newElement[2].value.toString(),
-    };
-    res.status(200).write(JSON.stringify({ newElement: newApp }));
-  } else {
-    res
-      .status(500)
-      .write(JSON.stringify({ message: "Failed to create the application." }));
-  }
+  let newApp: ReturnApp = {
+    applicationid: newAppId,
+    applicationname: newElement[1].value.toString(),
+    redirecturl: newElement[2].value.toString(),
+  };
+  responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
+    newElement: newApp,
+  });
 };
 
 /**
@@ -128,36 +131,33 @@ export const createApplication = async (
 export const updateApplication = async (
   req: Request,
   res: Response,
-  next: any
+  next: NextFunction
 ) => {
-  const client = req.body.client;
+  const client = req.body.client as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
   var updateElement = req.body.updateElement as DefaultValues[];
 
   // Construct the query to update the application.
   let query: QueryProps = {
     name: "appUpdateQuery",
-    text: "UPDATE applications SET applicationname=$1, redirecturl=$2 WHERE applicationid=$3",
+    text: "UPDATE applications SET applicationname=$1, redirecturl=$2 WHERE applicationid=$3 RETURNING *;",
     values: [
       updateElement[1].value.toString(),
       updateElement[2].value.toString(),
       updateElement[0].value.toString(),
     ],
   };
-  const { code, rows } = await performQuery(client, query);
+  await client.PerformQuery(query);
 
   // Return the appropriate data.
-  if (code === 200) {
-    let udpatedApp: ReturnApp = {
-      applicationid: updateElement[0].value.toString(),
-      applicationname: updateElement[1].value.toString(),
-      redirecturl: updateElement[2].value.toString(),
-    };
-    res.status(200).write(JSON.stringify({ updatedElement: udpatedApp }));
-  } else {
-    res
-      .status(500)
-      .write(JSON.stringify({ message: "The application failed to update." }));
-  }
+  let udpatedApp: ReturnApp = {
+    applicationid: updateElement[0].value.toString(),
+    applicationname: updateElement[1].value.toString(),
+    redirecturl: updateElement[2].value.toString(),
+  };
+  responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
+    updatedElement: udpatedApp,
+  });
 };
 
 /**
@@ -169,9 +169,10 @@ export const updateApplication = async (
 export const deleteApplication = async (
   req: Request,
   res: Response,
-  next: any
+  next: NextFunction
 ) => {
-  const client = req.body.client;
+  const client = req.body.client as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
   var deleteElement = req.body.deleteElement as DefaultValues[];
 
   // Construct the query.
@@ -180,7 +181,6 @@ export const deleteApplication = async (
     text: "DELETE FROM applications WHERE applicationid=$1;",
     values: [deleteElement[0].value.toString()],
   };
-  const { code, rows } = await performQuery(client, query);
-  // Return the result of the query.
-  res.status(code);
+  await client.PerformQuery(query);
+  responseHelper.GenericResponse(HttpStatusCode.Ok);
 };

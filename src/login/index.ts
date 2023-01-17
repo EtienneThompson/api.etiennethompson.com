@@ -1,17 +1,29 @@
-import { Request, Response } from "express";
+import { Request, Response, NextFunction } from "express";
 import { v4 as uuidv4 } from "uuid";
 import aws from "aws-sdk";
 import { LoginRequest, ApplicationEntry, UserAdminStatus } from "./types";
 import { UserEntry } from "../types";
-import { QueryProps, performQuery, getUserId } from "../utils/database";
+import { QueryProps, DatabaseConnection } from "../utils/database";
 import {
   createHourExpiration,
   createMinuteExpiration,
   getCurrentTimeField,
 } from "../utils/date";
+import {
+  ErrorStatusCode,
+  HttpStatusCode,
+  ResponseHelper,
+  SuccessfulStatusCode,
+} from "../utils/response";
+import { User } from "../admin/types";
 
-export const loginHandler = async (req: Request, res: Response, next: any) => {
-  const client = req.body.client;
+export const loginHandler = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  const client = req.body.client as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
   var reqBody = req.body as LoginRequest;
 
   // Verify that the user exists and get the user's client id.
@@ -23,20 +35,11 @@ export const loginHandler = async (req: Request, res: Response, next: any) => {
     text: "SELECT clientid, userid, session_expiration FROM users WHERE username=$1 AND password=$2;",
     values: [reqBody.username, reqBody.hashedPassword],
   };
-  let { code, rows } = await performQuery(client, query);
-  if (code === 200 && rows.length > 0) {
-    const entry = rows[0] as UserEntry;
-    clientId = entry.clientid;
-    userId = entry.userid;
-    session_expiration = entry.session_expiration;
-  } else {
-    // No results, return an error message.
-    res
-      .status(404)
-      .write(JSON.stringify({ message: "That user doesn't exist" }));
-    next();
-    return;
-  }
+  let userRows: UserEntry[] = await client.PerformQuery(query);
+  const entry = userRows[0];
+  clientId = entry.clientid;
+  userId = entry.userid;
+  session_expiration = entry.session_expiration;
 
   // Verify the application exists and get the redirect url for that application.
   let redirectUrl: string = "";
@@ -45,32 +48,19 @@ export const loginHandler = async (req: Request, res: Response, next: any) => {
     text: "SELECT redirecturl FROM applications WHERE applicationid=$1;",
     values: [reqBody.appid],
   };
-  ({ code, rows } = await performQuery(client, query));
-  if (code === 200 && rows) {
-    rows = rows as ApplicationEntry[];
-    for (let i = 0; i < rows.length; i++) {
-      const entry = rows[i] as ApplicationEntry;
-      if (entry.redirecturl.indexOf(reqBody.redirectBase)) {
-        redirectUrl = entry.redirecturl;
-        break;
-      }
+  let redirectUrls: ApplicationEntry[] = await client.PerformQuery(query);
+  for (let i = 0; i < redirectUrls.length; i++) {
+    const entry = redirectUrls[i] as ApplicationEntry;
+    if (entry.redirecturl.indexOf(reqBody.redirectBase)) {
+      redirectUrl = entry.redirecturl;
+      break;
     }
-    if (redirectUrl === "") {
-      res.status(404).write(
-        JSON.stringify({
-          message: "Could not find matching redirect url for given base.",
-        })
-      );
-      next();
-      return;
-    }
-  } else {
-    // No results, return an error message.
-    res
-      .status(404)
-      .write(JSON.stringify({ message: "That application doesn't exist." }));
-    next();
-    return;
+  }
+  if (redirectUrl === "") {
+    return responseHelper.ErrorResponse(
+      ErrorStatusCode.NotFound,
+      "Could not find matching redirect url for given base."
+    );
   }
 
   // Get the user, admin status for the given user for the given application.
@@ -79,21 +69,18 @@ export const loginHandler = async (req: Request, res: Response, next: any) => {
     text: "SELECT isuser, isadmin FROM applicationusers WHERE userid=$1 AND applicationid=$2",
     values: [userId, reqBody.appid],
   };
-  ({ code, rows } = await performQuery(client, query));
+  let userStatus: UserAdminStatus[] = await client.PerformQuery(query);
   let isUser: boolean = false;
   let isAdmin: boolean = false;
-  if (code !== 200) {
-    res.status(404).write(
-      JSON.stringify({
-        message: "That user is not a member of the given application.",
-      })
+
+  if (userStatus.length === 0) {
+    return responseHelper.ErrorResponse(
+      ErrorStatusCode.NotFound,
+      "That user is not a member of the given application."
     );
-    next();
-    return;
   } else {
-    const appUsers = rows[0] as UserAdminStatus;
-    isUser = appUsers.isuser;
-    isAdmin = appUsers.isadmin;
+    isUser = userStatus[0].isuser;
+    isAdmin = userStatus[0].isadmin;
   }
 
   // Check if the user has a currently valid clientid, if they do, get that
@@ -105,53 +92,37 @@ export const loginHandler = async (req: Request, res: Response, next: any) => {
     retClientId = uuidv4();
     const expiration = createHourExpiration();
     query = {
-      text: "UPDATE users SET clientid=$1, session_expiration=$2 WHERE userid=$3;",
+      text: "UPDATE users SET clientid=$1, session_expiration=$2 WHERE userid=$3 RETURNING *;",
       values: [retClientId, expiration, userId],
     };
-    ({ code, rows } = await performQuery(client, query));
-    if (code !== 200) {
-      res
-        .status(500)
-        .write(JSON.stringify({ message: "There was an unexpected error. " }));
-      next();
-      return;
-    }
+    await client.PerformQuery(query);
   } else {
     // Use the existing clientId.
     retClientId = clientId;
     const expiration = createHourExpiration();
     query = {
-      text: "UPDATE users SET session_expiration=$1 WHERE userid=$2;",
+      text: "UPDATE users SET session_expiration=$1 WHERE userid=$2 RETURNING *;",
       values: [expiration, userId],
     };
-    ({ code, rows } = await performQuery(client, query));
-    if (code != 200) {
-      res
-        .status(500)
-        .write(JSON.stringify({ message: "There was an unexpected error. " }));
-      next();
-      return;
-    }
+    await client.PerformQuery(query);
   }
 
-  res.status(200).write(
-    JSON.stringify({
-      clientId: retClientId,
-      redirectUrl: redirectUrl,
-      isUser: isUser,
-      isAdmin: isAdmin,
-    })
-  );
-  next();
+  responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {
+    clientId: retClientId,
+    redirectUrl: redirectUrl,
+    isUser: isUser,
+    isAdmin: isAdmin,
+  });
 };
 
 export const sendResetPasswordEmail = async (
   req: Request,
   res: Response,
-  next: any
+  next: NextFunction
 ) => {
-  const client = req.body.client;
-  var email = req.body.email;
+  const client = req.body.client as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
+  var email = req.body.email as string;
 
   // Lookup that the email entered is associated with an account.
   let query: QueryProps = {
@@ -159,14 +130,12 @@ export const sendResetPasswordEmail = async (
     text: "SELECT userid, username FROM users WHERE email=$1;",
     values: [email],
   };
-  let { code, rows } = await performQuery(client, query);
-  if (code !== 200 || rows.length === 0) {
-    res.status(400);
-    res.write(
-      JSON.stringify({ message: "Couldn't find a user with that email" })
+  let response = await client.PerformQuery(query);
+  if (response.length === 0) {
+    return responseHelper.ErrorResponse(
+      ErrorStatusCode.BadRequest,
+      "Couldn't find a user with that email."
     );
-    next();
-    return;
   }
 
   // Generate a random UUID for the code and generate the expiration for 15
@@ -179,17 +148,7 @@ export const sendResetPasswordEmail = async (
     text: "UPDATE users SET reset_code=$1, reset_expiration=$2 WHERE email=$3;",
     values: [resetCode, expiration, email],
   };
-  ({ code, rows } = await performQuery(client, query));
-  if (code !== 200) {
-    res.status(400);
-    res.write(
-      JSON.stringify({
-        message: "Failed to set the reset code and expiration.",
-      })
-    );
-    next();
-    return;
-  }
+  await client.PerformQuery(query);
 
   // Send the email with the reset link.
   var link = `${process.env.SITE_URL}/reset_password?code=${resetCode}`;
@@ -221,26 +180,25 @@ export const sendResetPasswordEmail = async (
   var ses = new aws.SES({ apiVersion: "2010-12-01" });
   await ses.sendEmail(emailParams, (err, data) => {
     if (err) {
-      res.status(400);
-      res.write(JSON.stringify({ message: "Failed to send an email." }));
-      next();
-      return;
+      return responseHelper.ErrorResponse(
+        ErrorStatusCode.BadRequest,
+        "Failed to send the email."
+      );
     }
   });
 
-  res.status(200);
-  next();
-  return;
+  responseHelper.GenericResponse(HttpStatusCode.Ok);
 };
 
 export const changePassword = async (
   req: Request,
   res: Response,
-  next: any
+  next: NextFunction
 ) => {
-  const client = req.body.client;
-  const resetCode = req.body.resetCode;
-  const newPassword = req.body.newPassword;
+  const client = req.body.client as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
+  const resetCode = req.body.resetCode as string;
+  const newPassword = req.body.newPassword as string;
 
   const currentTime = getCurrentTimeField();
 
@@ -249,19 +207,6 @@ export const changePassword = async (
     text: "UPDATE users SET password=$1, reset_code=NULL, reset_expiration=NULL WHERE reset_code=$2 AND reset_expiration>=$3 RETURNING user;",
     values: [newPassword, resetCode, currentTime],
   };
-  const { code, rows } = await performQuery(client, query);
-  if (code !== 200 || rows.length === 0) {
-    res.status(400);
-    res.write(
-      JSON.stringify({
-        message: "Couldn't reset your password. The code might have expired.",
-      })
-    );
-    next();
-    return;
-  }
-
-  res.status(200);
-  next();
-  return;
+  await client.PerformQuery(query);
+  responseHelper.GenericResponse(HttpStatusCode.Ok);
 };
