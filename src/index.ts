@@ -307,6 +307,9 @@ app.get("/thompsonaccounting/fields/metadata", (req, res, next) =>
 app.post("/thompsonaccounting/fields/metadata", (req, res, next) =>
   handleExceptions(next, () => accounting.reorderFields(req, res, next))
 );
+app.post("/thompsonaccounting/fields/move", (req, res, next) =>
+  handleExceptions(next, () => accounting.moveField(req, res, next))
+);
 app.post("/thompsonaccounting/fields", (req, res, next) =>
   handleExceptions(next, () => accounting.createField(req, res, next))
 );
