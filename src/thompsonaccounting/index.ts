@@ -675,14 +675,8 @@ export const moveField = async (
     newTabName,
     req.body.fieldName as string
   );
-  console.log(fieldName);
-  console.log(oldFieldName);
-  console.log(newFieldName);
-  console.log(originalTabName);
-  console.log(newTabName);
 
   let tableSchema = await getTableSchema(client.GetClient(), originalTabName);
-  console.log(tableSchema);
   let fieldSchema = tableSchema.filter(
     (field) => field.column_name === fieldName
   )[0];
@@ -699,40 +693,18 @@ export const moveField = async (
       fieldType = "TEXT";
       break;
     case "USER-DEFINED":
-      fieldType = "USER-DEFINED";
+      // set the type to the old enum name so we can appropriately copy values
+      // over.
+      fieldType = oldFieldName;
       break;
     default:
       fieldType = "TEXT";
       break;
   }
 
-  console.log(fieldType);
-
-  // If the data_type is USER-DEFINED, create the enum again with the new field
-  // name but same values.
-  if (fieldSchema.data_type === "USER-DEFINED") {
-    // Get the current values of the enum.
-    let enumVals = await getEnumTypeValues(client.GetClient(), oldFieldName);
-    console.log(enumVals);
-
-    // Create the enum with the new field name.
-    let createEnumQuery = `CREATE TYPE ${newFieldName} AS ENUM (${enumVals.map(
-      (val) => "'" + val + "'"
-    )});`;
-    console.log(createEnumQuery);
-
-    let enumQuery: QueryProps = {
-      name: `create${newFieldName}Query`,
-      text: createEnumQuery,
-      values: [],
-    };
-    await client.PerformQuery(enumQuery);
-  }
-
   // Add the column to the new table.
   let sqlString = "ALTER TABLE %I ADD COLUMN %s %s;";
-  let sql = format(sqlString, newTabName, newFieldName, newFieldName);
-  console.log(sql);
+  let sql = format(sqlString, newTabName, newFieldName, fieldType);
   await client.PerformFormattedQuery(sql);
 
   // This query doesn't work for enums as the types won't match up.
@@ -766,7 +738,6 @@ export const moveField = async (
     "clients",
     newTabName
   );
-  console.log(sql);
   await client.PerformFormattedQuery(sql);
 
   // Insert a new field_metadata.
@@ -784,7 +755,6 @@ export const moveField = async (
   // Drop the column from the original table.
   sqlString = "ALTER TABLE %I DROP COLUMN %s;";
   sql = format(sqlString, originalTabName, oldFieldName);
-  console.log(sql);
   await client.PerformFormattedQuery(sql);
 
   // Delete the existing field_metadata;
@@ -809,7 +779,6 @@ export const moveField = async (
   for (let i = 1; i < fieldMetadata.length; i++) {
     let difference = fieldMetadata[i].position - fieldMetadata[i - 1].position;
     if (difference > 1) {
-      console.log("updating position");
       let newPosition = fieldMetadata[i].position - (difference - 1);
       fieldMetadata[i].position = newPosition;
 
@@ -822,11 +791,10 @@ export const moveField = async (
     }
   }
 
-  // If the type was an enum, delete the old enum type.
+  // If the type was an enum, rename the enum so it matches the field name.
   if (fieldSchema.data_type === "USER-DEFINED") {
-    sqlString = "DROP TYPE %s;";
-    sql = format(sqlString, oldFieldName);
-    console.log(sql);
+    sqlString = "ALTER TYPE %I RENAME TO %s";
+    sql = format(sqlString, oldFieldName, newFieldName);
     await client.PerformFormattedQuery(sql);
   }
 
