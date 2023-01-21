@@ -611,17 +611,14 @@ export const getFieldsMetadata = async (
   next: NextFunction
 ) => {
   const client = req.body.awsClient as DatabaseConnection;
-  const responseHelper = req.body.resopnse as ResponseHelper;
+  const responseHelper = req.body.response as ResponseHelper;
   const tabName = createTabName(req.query.tabName as string);
 
   let metadata: FieldMetadata[] = [];
   try {
     metadata = await getFieldMetadataForTab(client.GetClient(), tabName);
   } catch (e: any) {
-    return responseHelper.SuccessfulResponse(
-      SuccessfulStatusCode.Ok,
-      e.message
-    );
+    return responseHelper.ErrorResponse(ErrorStatusCode.BadRequest, e.message);
   }
 
   metadata = metadata.map((data) => {
@@ -658,6 +655,142 @@ export const reorderFields = async (
   }
 
   responseHelper.GenericResponse(HttpStatusCode.Ok);
+};
+
+export const moveField = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  const client = req.body.awsClient as DatabaseConnection;
+  const responseHelper = req.body.response as ResponseHelper;
+  const originalTabName = createTabName(req.body.originalTabName as string);
+  const newTabName = createTabName(req.body.newTabName as string);
+  const fieldName = createTabName(req.body.fieldName as string);
+  const oldFieldName = createFieldName(
+    originalTabName,
+    req.body.fieldName as string
+  );
+  const newFieldName = createFieldName(
+    newTabName,
+    req.body.fieldName as string
+  );
+
+  let tableSchema = await getTableSchema(client.GetClient(), originalTabName);
+  let fieldSchema = tableSchema.filter(
+    (field) => field.column_name === fieldName
+  )[0];
+
+  let fieldType;
+  switch (fieldSchema.data_type) {
+    case "character varying":
+      fieldType = "VARCHAR(200)";
+      break;
+    case "boolean":
+      fieldType = "BOOLEAN";
+      break;
+    case "text":
+      fieldType = "TEXT";
+      break;
+    case "USER-DEFINED":
+      // set the type to the old enum name so we can appropriately copy values
+      // over.
+      fieldType = oldFieldName;
+      break;
+    default:
+      fieldType = "TEXT";
+      break;
+  }
+
+  // Add the column to the new table.
+  let sqlString = "ALTER TABLE %I ADD COLUMN %s %s;";
+  let sql = format(sqlString, newTabName, newFieldName, fieldType);
+  await client.PerformFormattedQuery(sql);
+
+  // Copy all the data over from the last table to the new one.
+  sqlString =
+    "UPDATE %I " +
+    "SET %s=%I.%s " +
+    "FROM %I " +
+    "JOIN %I ON %I.%s_id = %I.%s " +
+    "WHERE %I.%s_id = %I.%s;";
+  sql = format(
+    sqlString,
+    newTabName,
+    newFieldName,
+    originalTabName,
+    oldFieldName,
+    originalTabName,
+    "clients",
+    originalTabName,
+    originalTabName,
+    "clients",
+    originalTabName,
+    newTabName,
+    newTabName,
+    "clients",
+    newTabName
+  );
+  await client.PerformFormattedQuery(sql);
+
+  // Insert a new field_metadata.
+  let metadataId = uuidv4();
+  // Subtract 1 to account for the new field.
+  let position = (await getNumberOfFields(client.GetClient(), newTabName)) - 1;
+  let query = {
+    name: "CreateFieldMetadata",
+    text: "INSERT INTO field_metadata (metadata_id, tab_name, field_name, position) VALUES ($1, $2, $3, $4);",
+    values: [metadataId, newTabName, newFieldName, position],
+  };
+  await client.PerformQuery(query);
+
+  // Drop the column from the original table.
+  sqlString = "ALTER TABLE %I DROP COLUMN %s;";
+  sql = format(sqlString, originalTabName, oldFieldName);
+  await client.PerformFormattedQuery(sql);
+
+  // Delete the existing field_metadata;
+  query = {
+    name: "DeleteFieldMetadata",
+    text: "DELETE FROM field_metadata WHERE tab_name=$1 AND field_name=$2;",
+    values: [originalTabName, oldFieldName],
+  };
+  await client.PerformQuery(query);
+
+  // Need to update the other positions of the remaining fields to make sure
+  // the numbers remain in 0, 1, 2, 3, ... order, even if say position 0 is
+  // moved. Otherwise, if you have 2 metadata with position 0 and 1, if you
+  // move position 0 and then later add another field, you would end up with 2
+  // position 1's.
+  let fieldMetadata = await getFieldMetadataForTab(
+    client.GetClient(),
+    originalTabName
+  );
+
+  fieldMetadata = fieldMetadata.sort((a, b) => a.position - b.position);
+  for (let i = 1; i < fieldMetadata.length; i++) {
+    let difference = fieldMetadata[i].position - fieldMetadata[i - 1].position;
+    if (difference > 1) {
+      let newPosition = fieldMetadata[i].position - (difference - 1);
+      fieldMetadata[i].position = newPosition;
+
+      let query: QueryProps = {
+        name: "UpdateMetadataPosition",
+        text: "UPDATE field_metadata SET position=$1 WHERE tab_name=$2 AND field_name=$3;",
+        values: [newPosition, originalTabName, fieldMetadata[i].field_name],
+      };
+      await client.PerformQuery(query);
+    }
+  }
+
+  // If the type was an enum, rename the enum so it matches the field name.
+  if (fieldSchema.data_type === "USER-DEFINED") {
+    sqlString = "ALTER TYPE %I RENAME TO %s";
+    sql = format(sqlString, oldFieldName, newFieldName);
+    await client.PerformFormattedQuery(sql);
+  }
+
+  responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {});
 };
 
 export const createField = async (
@@ -744,9 +877,8 @@ export const createField = async (
 
   // Add a column to the field metadata.
   let metadataId = uuidv4();
-  // Subtract 2 from the number of fields to account for the ID field and the
-  // newly created field.
-  let position = (await getNumberOfFields(client.GetClient(), tabId)) - 2;
+  // Subtract 1 from the number of fields to account for the newly created field.
+  let position = (await getNumberOfFields(client.GetClient(), tabId)) - 1;
   query = {
     name: "CreateFieldMetadata",
     text: "INSERT INTO field_metadata (metadata_id, tab_name, field_name, position) VALUES ($1, $2, $3, $4);",

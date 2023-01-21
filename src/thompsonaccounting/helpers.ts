@@ -81,7 +81,11 @@ export const getFieldMetadataForTab = async (
     throw new Error(`Could not get the metadata for ${tabName}`);
   }
 
-  return rows as FieldMetadata[];
+  let metadata = (rows as FieldMetadata[]).sort(
+    (a, b) => a.position - b.position
+  );
+
+  return metadata;
 };
 
 export const getTableSchema = async (
@@ -208,7 +212,7 @@ export const getClientSchema = async (
           value = false;
           break;
         case "text":
-          type = "textarea";
+          type = "text";
           value = "";
           break;
         case "USER-DEFINED":
