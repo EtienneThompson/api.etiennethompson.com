@@ -707,13 +707,6 @@ export const moveField = async (
   let sql = format(sqlString, newTabName, newFieldName, fieldType);
   await client.PerformFormattedQuery(sql);
 
-  // This query doesn't work for enums as the types won't match up.
-  // For enums, what needs to be done is name the column in the new tab the same
-  // as the column in the old tab, then copy the data over, then rename the column
-  // to the appropriate name.
-  // This way we can copy over the type as well to the new column if it is an enum,
-  // Copy the values over, then drop the old column without dropping the enum.
-
   // Copy all the data over from the last table to the new one.
   sqlString =
     "UPDATE %I " +
@@ -742,8 +735,7 @@ export const moveField = async (
 
   // Insert a new field_metadata.
   let metadataId = uuidv4();
-  // Subtract 2 from the number of fields to account for the ID field and the
-  // newly created field.
+  // Subtract 1 to account for the new field.
   let position = (await getNumberOfFields(client.GetClient(), newTabName)) - 1;
   let query = {
     name: "CreateFieldMetadata",
@@ -885,9 +877,8 @@ export const createField = async (
 
   // Add a column to the field metadata.
   let metadataId = uuidv4();
-  // Subtract 2 from the number of fields to account for the ID field and the
-  // newly created field.
-  let position = (await getNumberOfFields(client.GetClient(), tabId)) - 2;
+  // Subtract 1 from the number of fields to account for the newly created field.
+  let position = (await getNumberOfFields(client.GetClient(), tabId)) - 1;
   query = {
     name: "CreateFieldMetadata",
     text: "INSERT INTO field_metadata (metadata_id, tab_name, field_name, position) VALUES ($1, $2, $3, $4);",
