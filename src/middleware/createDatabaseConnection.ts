@@ -2,11 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import { DatabaseConnection } from "../utils/database";
 import { ResponseHelper } from "../utils/response";
 
-export const createDatabaseConnection = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
+export const createDatabaseConnection = async (req: Request, res: Response, next: NextFunction) => {
   if (req.url.includes("/thompsonaccounting")) {
     if (
       !process.env.THOMPSON_ACCOUNTING_DATABASE_HOST ||
@@ -44,7 +40,7 @@ export const createDatabaseConnection = async (
   await client.Begin();
   req.body.client = client;
 
-  const responseHelper = new ResponseHelper(res, next);
+  const responseHelper = new ResponseHelper(req, res, next);
   req.body.response = responseHelper;
 
   res.type("json");

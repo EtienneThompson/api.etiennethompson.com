@@ -25,7 +25,17 @@ export interface QueryProps {
   values: (string | boolean | number)[];
 }
 
-export class DatabaseConnection {
+export interface IDatabaseConnection {
+  Connect(): Promise<void>;
+  Close(): Promise<void>;
+  Begin(): Promise<void>;
+  Commit(): Promise<void>;
+  Rollback(): Promise<void>;
+  PerformQuery(query: QueryProps): Promise<any[]>;
+  PerformFormattedQuery(query: string): Promise<any[]>;
+}
+
+export class DatabaseConnection implements IDatabaseConnection {
   client: Client | undefined;
   isFinished: boolean;
   isOpen: boolean;

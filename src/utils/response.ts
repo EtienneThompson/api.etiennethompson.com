@@ -1,4 +1,4 @@
-import { Response, NextFunction } from "express";
+import { Request, Response, NextFunction } from "express";
 
 export enum HttpStatusCode {
   Ok = 200,
@@ -48,11 +48,20 @@ export enum AuthenticationFailureReason {
   InvalidUser = 105,
 }
 
-export class ResponseHelper {
-  res: Response;
-  next: NextFunction;
+export interface IResponseHelper {
+  SuccessfulResponse(code: SuccessfulStatusCode, data: object): void;
+  ErrorResponse(code: ErrorStatusCode, message: string): void;
+  GenericResponse(code: HttpStatusCode, data: any): void;
+  Unauthorized(reason: AuthenticationFailureReason, message: string): void;
+}
 
-  constructor(res: Response, next: NextFunction) {
+export class ResponseHelper implements IResponseHelper {
+  public req: Request;
+  public res: Response;
+  public next: NextFunction;
+
+  constructor(req: Request, res: Response, next: NextFunction) {
+    this.req = req;
     this.res = res;
     this.next = next;
   }
