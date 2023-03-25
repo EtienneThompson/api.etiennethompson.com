@@ -18,11 +18,7 @@ export const closeDatabaseConnection = async (req: Request) => {
   await closeDatabaseConnectionInternal(req);
 };
 
-export const closeDatabaseConnectionMiddleware = async (
-  req: Request,
-  res: Response,
-  next: any
-) => {
+export const closeDatabaseConnectionMiddleware = async (req: Request, res: Response, next: any) => {
   await closeDatabaseConnectionInternal(req);
   const responseHelper: ResponseHelper = req.body.response;
   responseHelper.End();

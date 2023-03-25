@@ -3,7 +3,6 @@ import { exceptionLogging } from "./middleware/exceptionLogging";
 import { createDatabaseConnection } from "./middleware/createDatabaseConnection";
 import { closeDatabaseConnectionMiddleware } from "./middleware/closeDatabaseConnection";
 import { validateUser } from "./middleware/validateUser";
-import * as login from "./login";
 import * as dashboard from "./admin/Dashboard";
 import * as users from "./admin/Users";
 import * as mockUsers from "./admin/Users/mocks";
@@ -13,6 +12,7 @@ import * as applicationUsers from "./admin/ApplicationUsers";
 import * as mockApplicationUsers from "./admin/ApplicationUsers/mocks";
 import * as inventory from "./inventory";
 import * as accounting from "./thompsonaccounting";
+import RouteFactory from "./routes/RouteFactory";
 
 require("dotenv").config({ path: `./.env.${process.env.APP_ENV}` });
 const cors = require("cors");
@@ -84,101 +84,53 @@ app.use(validateUser);
 app.get("/", handler);
 
 // Login routes.
-app.post("/login", login.loginHandler);
-app.post("/login/reset/request", login.sendResetPasswordEmail);
-app.post("/login/reset", login.changePassword);
+app.post("/login", (req, res, next) => new RouteFactory(req).GetLoginHandler().Login());
+app.post("/login/reset/request", (req, res, next) => new RouteFactory(req).GetLoginHandler().SendResetPasswordEmail());
+app.post("/login/reset", (req, res, next) => new RouteFactory(req).GetLoginHandler().ChangePassword());
 
 // Admin User routes.
 app.get("/admin/dashboard/count", dashboard.getTableCounts);
 app.get(
   "/admin/users",
   async (req: Request, res: Response, next: NextFunction) =>
-    await requestFactory(
-      req,
-      res,
-      next,
-      users.getUsers,
-      mockUsers.mockGetUsers
-    )
+    await requestFactory(req, res, next, users.getUsers, mockUsers.mockGetUsers)
 );
 app.post(
   "/admin/users/create",
   async (req: Request, res: Response, next: NextFunction) =>
-    await requestFactory(
-      req,
-      res,
-      next,
-      users.createUser,
-      mockUsers.mockCreateUser
-    )
+    await requestFactory(req, res, next, users.createUser, mockUsers.mockCreateUser)
 );
 app.put(
   "/admin/users/update",
   async (req: Request, res: Response, next: NextFunction) =>
-    await requestFactory(
-      req,
-      res,
-      next,
-      users.updateUser,
-      mockUsers.mockUpdateUser
-    )
+    await requestFactory(req, res, next, users.updateUser, mockUsers.mockUpdateUser)
 );
 app.delete(
   "/admin/users/delete",
   async (req: Request, res: Response, next: NextFunction) =>
-    await requestFactory(
-      req,
-      res,
-      next,
-      users.deleteUser,
-      mockUsers.mockDeleteUser
-    )
+    await requestFactory(req, res, next, users.deleteUser, mockUsers.mockDeleteUser)
 );
 
 // Admin Applications routes.
 app.get(
   "/admin/applications",
   async (req: Request, res: Response, next: NextFunction) =>
-    await requestFactory(
-      req,
-      res,
-      next,
-      applications.getApplications,
-      mockApplications.mockGetApplications
-    )
+    await requestFactory(req, res, next, applications.getApplications, mockApplications.mockGetApplications)
 );
 app.post(
   "/admin/applications/create",
   async (req: Request, res: Response, next: NextFunction) =>
-    await requestFactory(
-      req,
-      res,
-      next,
-      applications.createApplication,
-      mockApplications.mockCreateApplication
-    )
+    await requestFactory(req, res, next, applications.createApplication, mockApplications.mockCreateApplication)
 );
 app.put(
   "/admin/applications/update",
   async (req: Request, res: Response, next: NextFunction) =>
-    await requestFactory(
-      req,
-      res,
-      next,
-      applications.updateApplication,
-      mockApplications.mockUpdateApplication
-    )
+    await requestFactory(req, res, next, applications.updateApplication, mockApplications.mockUpdateApplication)
 );
 app.delete(
   "/admin/applications/delete",
   async (req: Request, res: Response, next: NextFunction) =>
-    await requestFactory(
-      req,
-      res,
-      next,
-      applications.deleteApplication,
-      mockApplications.mockDeleteApplication
-    )
+    await requestFactory(req, res, next, applications.deleteApplication, mockApplications.mockDeleteApplication)
 );
 
 // Admin ApplicationUsers routes.
@@ -228,9 +180,7 @@ app.delete(
 );
 
 // Inventory routes.
-app.get("/inventory/folder", (req, res, next) =>
-  handleExceptions(next, () => inventory.getFolder(req, res, next))
-);
+app.get("/inventory/folder", (req, res, next) => handleExceptions(next, () => inventory.getFolder(req, res, next)));
 app.get("/inventory/folder/children", (req, res, next) =>
   handleExceptions(next, () => inventory.getFolderChildren(req, res, next))
 );
@@ -247,9 +197,7 @@ app.get("/inventory/folder/base", (req, res, next) =>
   handleExceptions(next, () => inventory.getBaseFolder(req, res, next))
 );
 
-app.get("/inventory/item", (req, res, next) =>
-  handleExceptions(next, () => inventory.getItem(req, res, next))
-);
+app.get("/inventory/item", (req, res, next) => handleExceptions(next, () => inventory.getItem(req, res, next)));
 app.post("/inventory/item/create", (req, res, next) =>
   handleExceptions(next, () => inventory.createItem(req, res, next))
 );
@@ -260,9 +208,7 @@ app.delete("/inventory/item/delete", (req, res, next) =>
   handleExceptions(next, () => inventory.deleteItem(req, res, next))
 );
 
-app.post("/inventory/move", (req, res, next) =>
-  handleExceptions(next, () => inventory.moveElement(req, res, next))
-);
+app.post("/inventory/move", (req, res, next) => handleExceptions(next, () => inventory.moveElement(req, res, next)));
 
 // Thompson Accounting routes.
 app.get("/thompsonaccounting/clients", (req, res, next) =>
