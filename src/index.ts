@@ -3,7 +3,6 @@ import { exceptionLogging } from "./middleware/exceptionLogging";
 import { createDatabaseConnection } from "./middleware/createDatabaseConnection";
 import { closeDatabaseConnectionMiddleware } from "./middleware/closeDatabaseConnection";
 import { validateUser } from "./middleware/validateUser";
-import * as login from "./login";
 import * as dashboard from "./admin/Dashboard";
 import * as users from "./admin/Users";
 import * as mockUsers from "./admin/Users/mocks";
@@ -85,9 +84,9 @@ app.use(validateUser);
 app.get("/", handler);
 
 // Login routes.
-app.post("/login", (req, res, next) => new RouteFactory(req).getLoginHandler().Login());
-app.post("/login/reset/request", login.sendResetPasswordEmail);
-app.post("/login/reset", login.changePassword);
+app.post("/login", (req, res, next) => new RouteFactory(req).GetLoginHandler().Login());
+app.post("/login/reset/request", (req, res, next) => new RouteFactory(req).GetLoginHandler().SendResetPasswordEmail());
+app.post("/login/reset", (req, res, next) => new RouteFactory(req).GetLoginHandler().ChangePassword());
 
 // Admin User routes.
 app.get("/admin/dashboard/count", dashboard.getTableCounts);

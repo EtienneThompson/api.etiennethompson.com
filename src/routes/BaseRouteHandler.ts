@@ -11,8 +11,8 @@ class BaseRouteHandler implements IBaseRouteHandler {
   public async HandleRequest(handler: () => Promise<void>, mockHandler: () => Promise<void>): Promise<void> {
     try {
       await this.HandleMockRequests(handler, mockHandler);
-    } catch (e: any) {
-      this.next();
+    } catch (error: any) {
+      this.next(error);
     }
   }
 

@@ -5,20 +5,30 @@ import BaseRouteHandler from "./BaseRouteHandler";
 import { LoginRequest, ApplicationEntry, UserAdminStatus } from "../login/types";
 import { QueryProps } from "../utils/database";
 import { UserEntry } from "../types";
-import { SuccessfulStatusCode, ErrorStatusCode } from "../utils/response";
-import { createHourExpiration } from "../utils/date";
+import { HttpStatusCode, SuccessfulStatusCode, ErrorStatusCode } from "../utils/response";
+import { createHourExpiration, createMinuteExpiration, getCurrentTimeField } from "../utils/date";
 
 class LoginHandler extends BaseRouteHandler {
   private database: IDatabaseConnection;
   private responseHelper: ResponseHelper;
-  constructor(database: IDatabaseConnection, responseHelper: ResponseHelper) {
+  private aws: any;
+  constructor(database: IDatabaseConnection, responseHelper: ResponseHelper, aws: any) {
     super(responseHelper.req, responseHelper.next);
     this.database = database;
     this.responseHelper = responseHelper;
+    this.aws = aws;
   }
 
   public async Login(): Promise<void> {
     this.HandleRequest(this.LoginInternal, this.LoginMock);
+  }
+
+  public async SendResetPasswordEmail(): Promise<void> {
+    this.HandleRequest(this.SendResetPasswordEmailInternal, this.SendResetPasswordEmailMock);
+  }
+
+  public async ChangePassword(): Promise<void> {
+    this.HandleRequest(this.ChangePasswordInternal, this.ChangePasswordMock);
   }
 
   private LoginInternal = async (): Promise<void> => {
@@ -113,7 +123,90 @@ class LoginHandler extends BaseRouteHandler {
     });
   };
 
+  private SendResetPasswordEmailInternal = async (): Promise<void> => {
+    var email = this.responseHelper.req.body.email as string;
+
+    // Lookup that the email entered is associated with an account.
+    let query: QueryProps = {
+      name: "LookupUserByEmail",
+      text: "SELECT userid, username FROM users WHERE email=$1;",
+      values: [email],
+    };
+    let response = await this.database.PerformQuery(query);
+    if (response.length === 0) {
+      return this.responseHelper.ErrorResponse(ErrorStatusCode.BadRequest, "Couldn't find a user with that email.");
+    }
+
+    // Generate a random UUID for the code and generate the expiration for 15
+    // minutes in the future.
+    var resetCode = uuidv4();
+    var expiration = createMinuteExpiration(15);
+
+    query = {
+      name: "SetResetCode",
+      text: "UPDATE users SET reset_code=$1, reset_expiration=$2 WHERE email=$3;",
+      values: [resetCode, expiration, email],
+    };
+    await this.database.PerformQuery(query);
+
+    // Send the email with the reset link.
+    var link = `${process.env.SITE_URL}/reset_password?code=${resetCode}`;
+
+    var emailParams = {
+      Destination: {
+        ToAddresses: [email],
+      },
+      Message: {
+        Body: {
+          Text: {
+            Charset: "UTF-8",
+            Data: link,
+          },
+        },
+        Subject: {
+          Charset: "UTF-8",
+          Data: "[login.etiennethompson.com] You requested to reset your password.",
+        },
+      },
+      Source: "noreply@etiennethompson.com",
+    };
+
+    var ses = new this.aws.SES({ apiVersion: "2010-12-01" });
+    await ses.sendEmail(emailParams, (err: any, data: any) => {
+      if (err) {
+        return this.responseHelper.ErrorResponse(ErrorStatusCode.BadRequest, "Failed to send the email.");
+      }
+    });
+
+    this.responseHelper.GenericResponse(HttpStatusCode.Ok);
+  };
+
+  private ChangePasswordInternal = async () => {
+    const resetCode = this.responseHelper.req.body.resetCode as string;
+    const newPassword = this.responseHelper.req.body.newPassword as string;
+
+    const currentTime = getCurrentTimeField();
+
+    let query: QueryProps = {
+      name: "resetUserPassword",
+      text: "UPDATE users SET password=$1, reset_code=NULL, reset_expiration=NULL WHERE reset_code=$2 AND reset_expiration>=$3 RETURNING user;",
+      values: [newPassword, resetCode, currentTime],
+    };
+    await this.database.PerformQuery(query);
+    this.responseHelper.GenericResponse(HttpStatusCode.Ok);
+  };
+
   private LoginMock = async (): Promise<void> => {
+    this.responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {});
+    return Promise.resolve();
+  };
+
+  private SendResetPasswordEmailMock = async (): Promise<void> => {
+    this.responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {});
+    return Promise.resolve();
+  };
+
+  private ChangePasswordMock = async () => {
     this.responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, {});
     return Promise.resolve();
   };
