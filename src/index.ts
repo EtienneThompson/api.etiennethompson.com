@@ -88,6 +88,11 @@ app.post("/login", (req, res, next) => new RouteFactory(req).GetLoginHandler().L
 app.post("/login/reset/request", (req, res, next) => new RouteFactory(req).GetLoginHandler().SendResetPasswordEmail());
 app.post("/login/reset", (req, res, next) => new RouteFactory(req).GetLoginHandler().ChangePassword());
 
+// Etiennethompson routes
+app.post("/etiennethompson/support", (req, res, next) =>
+  new RouteFactory(req).GetEtienneThompsonHandler().SendSupportEmail()
+);
+
 // Admin User routes.
 app.get("/admin/dashboard/count", dashboard.getTableCounts);
 app.get(

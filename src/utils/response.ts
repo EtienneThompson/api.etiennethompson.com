@@ -66,9 +66,11 @@ export class ResponseHelper implements IResponseHelper {
     this.next = next;
   }
 
-  public SuccessfulResponse(code: SuccessfulStatusCode, data: object) {
+  public SuccessfulResponse(code: SuccessfulStatusCode, data?: object) {
     this.res.status(code);
-    this.res.write(JSON.stringify(data));
+    if (data) {
+      this.res.write(JSON.stringify(data));
+    }
     this.next();
   }
 
