@@ -41,7 +41,7 @@ class RouteFactory {
 
     const responseHelper = this.req.body.response as ResponseHelper;
 
-    return new EtienneThompsonHandler(responseHelper);
+    return new EtienneThompsonHandler(responseHelper, this.aws);
   }
 }
 
