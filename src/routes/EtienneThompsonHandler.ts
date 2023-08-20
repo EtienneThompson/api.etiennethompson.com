@@ -29,7 +29,7 @@ class EtienneThompsonHandler extends BaseRouteHandler {
 
     var emailParams: SESEmailParameters = {
       Destination: {
-        ToAddresses: ["et@etiennethompson.com"],
+        ToAddresses: ["support@etiennethompson.com"],
       },
       Message: {
         Body: {
