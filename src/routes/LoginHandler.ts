@@ -7,6 +7,7 @@ import { QueryProps } from "../utils/database";
 import { UserEntry } from "../types";
 import { HttpStatusCode, SuccessfulStatusCode, ErrorStatusCode } from "../utils/response";
 import { createHourExpiration, createMinuteExpiration, getCurrentTimeField } from "../utils/date";
+import { SESEmailParameters } from "../types/aws";
 
 class LoginHandler extends BaseRouteHandler {
   private database: IDatabaseConnection;
@@ -152,7 +153,7 @@ class LoginHandler extends BaseRouteHandler {
     // Send the email with the reset link.
     var link = `${process.env.SITE_URL}/reset_password?code=${resetCode}`;
 
-    var emailParams = {
+    var emailParams: SESEmailParameters = {
       Destination: {
         ToAddresses: [email],
       },

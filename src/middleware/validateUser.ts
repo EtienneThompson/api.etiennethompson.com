@@ -3,27 +3,18 @@ import { ApplicationUser } from "../admin/types";
 import { BaseRequest, UserEntry } from "../types";
 import { QueryProps, DatabaseConnection } from "../utils/database";
 import { getCurrentTimeField } from "../utils/date";
-import {
-  AuthenticationFailureReason,
-  ResponseHelper,
-} from "../utils/response";
+import { AuthenticationFailureReason, ResponseHelper } from "../utils/response";
 import { closeDatabaseConnection } from "./closeDatabaseConnection";
 
-export const validateUser = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  if (req.path.includes("/login")) {
+export const validateUser = async (req: Request, res: Response, next: NextFunction) => {
+  if (isValidationSkippedRoute(req)) {
     next();
     return;
   }
   const client = req.body.client as DatabaseConnection;
   const responseHelper = req.body.response as ResponseHelper;
 
-  var reqBody = (
-    req.body && req.body.clientid ? req.body : req.query
-  ) as BaseRequest;
+  var reqBody = (req.body && req.body.clientid ? req.body : req.query) as BaseRequest;
 
   if (!reqBody.clientid || !reqBody.appid) {
     await closeDatabaseConnection(req);
@@ -96,3 +87,7 @@ export const validateUser = async (
 
   next();
 };
+
+function isValidationSkippedRoute(req: Request): boolean {
+  return req.path.includes("login") || req.path.includes("etiennethompson");
+}

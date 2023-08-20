@@ -3,6 +3,7 @@ import { IDatabaseConnection } from "../utils/database";
 import { ResponseHelper } from "../utils/response";
 import LoginHandler from "./LoginHandler";
 import aws from "aws-sdk";
+import EtienneThompsonHandler from "./EtienneThompsonHandler";
 
 class RouteFactory {
   private req: Request;
@@ -31,6 +32,16 @@ class RouteFactory {
     const responseHelper = this.req.body.response as ResponseHelper;
 
     return new LoginHandler(client, responseHelper, this.aws);
+  }
+
+  public GetEtienneThompsonHandler(): EtienneThompsonHandler {
+    if (!this.req.body.response) {
+      throw new Error("No response builder in the request body.");
+    }
+
+    const responseHelper = this.req.body.response as ResponseHelper;
+
+    return new EtienneThompsonHandler(responseHelper, this.aws);
   }
 }
 
