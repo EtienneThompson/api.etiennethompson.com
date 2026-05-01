@@ -1,4 +1,5 @@
-import express, { Request, Response, NextFunction } from "express";
+import express from "express";
+import { Request, Response, NextFunction } from "express";
 import { exceptionLogging } from "./middleware/exceptionLogging";
 import { createDatabaseConnection } from "./middleware/createDatabaseConnection";
 import { closeDatabaseConnectionMiddleware } from "./middleware/closeDatabaseConnection";
@@ -14,12 +15,10 @@ import * as inventory from "./inventory";
 import * as accounting from "./thompsonaccounting";
 import RouteFactory from "./routes/RouteFactory";
 
-require("dotenv").config({ path: `./.env.${process.env.APP_ENV}` });
 const cors = require("cors");
 const fileUpload = require("express-fileupload");
 
 const app = express();
-const port = process.env.PORT || "4000";
 
 const handler = (req: Request, res: Response) => {
   return res.send("Hello world!");
@@ -59,13 +58,14 @@ var corsOptions = {
     "http://localhost:3001",
     "http://localhost:3002",
     "http://localhost:4000",
-    "http://login.etiennethompson.com",
-    "http://admin.etiennethompson.com",
-    "http://inventory.etiennethompson.com",
+    "https://login.etiennethompson.com",
+    "https://admin.etiennethompson.com",
+    "https://inventory.etiennethompson.com",
     "https://vivtho5.dreamhosters.com",
     "https://cms.vivianethompson.com",
   ],
 };
+app.options("*", cors(corsOptions));
 app.use(cors(corsOptions));
 app.use(express.json());
 app.use(fileUpload());
@@ -274,6 +274,4 @@ app.delete("/thompsonaccounting/field", (req, res, next) =>
 app.use(exceptionLogging);
 app.use(closeDatabaseConnectionMiddleware);
 
-app.listen(port, () => {
-  return console.log(`Server is listening on port ${port}`);
-});
+export default app;
