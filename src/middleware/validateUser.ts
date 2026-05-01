@@ -89,5 +89,5 @@ export const validateUser = async (req: Request, res: Response, next: NextFuncti
 };
 
 function isValidationSkippedRoute(req: Request): boolean {
-  return req.path.includes("login") || req.path.includes("etiennethompson");
+  return req.method === "OPTIONS" || req.path.includes("login") || req.path.includes("etiennethompson");
 }

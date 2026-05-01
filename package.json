@@ -3,9 +3,12 @@
   "version": "1.0.0",
   "description": "The back end services for my personal website.",
   "scripts": {
-    "dev": "APP_ENV=local nodemon --watch 'src/**/*.ts' --exec 'ts-node' src/index.ts",
-    "build-ppe": "APP_ENV=development tsc",
-    "build": "APP_ENV=production tsc",
+    "dev": "APP_ENV=local nodemon --watch 'src/**/*.ts' --exec 'ts-node' src/local.ts",
+    "dev-vercel": "APP_ENV=local vercel dev",
+    "build-ppe": "rm -rf dist && APP_ENV=development tsc",
+    "deploy-ppe": "npm run build-ppe && APP_ENV=development vercel deploy",
+    "build": "rm -rf dist && APP_ENV=production tsc",
+    "deploy": "npm run build && APP_ENV=production vercel deploy --prod",
     "start": "node dist/index.js"
   },
   "repository": "https://github.com/EtienneThompson/api.etiennethompson.com.git",
@@ -13,7 +16,7 @@
   "license": "MIT",
   "private": false,
   "engines": {
-    "node": "16.x"
+    "node": "24.x"
   },
   "dependencies": {
     "@types/aws-sdk": "^2.7.0",
