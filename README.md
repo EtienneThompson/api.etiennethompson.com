@@ -22,6 +22,7 @@ Every request gets it's own endpoints, usually in one of the following forms:
 - [OAuth Login Service](https://github.com/EtienneThompson/login.etiennethompson.com)
 - [Ecosystem Admin Center](https://github.com/EtienneThompson/admin.etiennethompson.com)
 - [Inventory System](https://github.com/EtienneThompson/inventory.etiennethompson.com)
+- [QR Tracker](https://github.com/EtienneThompson/QrCode)
 
 ## Technologies:
 - Typescript
@@ -47,3 +48,14 @@ Passkey settings, set as environment variables:
 - `WEBAUTHN_RP_ID`: the domain passkeys are bound to. Defaults to `etiennethompson.com`. Use `localhost` for local development.
 - `WEBAUTHN_RP_NAME`: the name shown by passkey managers. Defaults to `Etienne Thompson`.
 - `WEBAUTHN_ORIGINS`: comma separated origins allowed to use passkeys. Defaults to `https://login.etiennethompson.com`. Use `http://localhost:4000` for local development.
+
+## QR Tracker:
+
+The `/qr` routes back [QR Tracker](https://github.com/EtienneThompson/QrCode). `/qr/r/<id>` is the public link encoded in each QR code: it records the scan and redirects to the code's destination. The other `/qr` routes need a user of the QR Tracker application.
+
+Before deploying:
+
+1. Run the migration: `APP_ENV=production yarn run migrate 002_qr_tracker.sql`
+2. Set the environment variables:
+   - `QR_APPLICATION_ID`: QR Tracker's application id from the admin portal. Required. Requests made with any other application id are refused.
+   - `QR_PUBLIC_BASE_URL`: the base URL encoded in QR codes, e.g. `https://qr.etiennethompson.com` (that site forwards `/r/<id>` to `/qr/r/<id>`). Defaults to this API's own `/qr` path. Set it before printing codes.
