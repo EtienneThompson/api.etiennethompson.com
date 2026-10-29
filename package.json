@@ -10,6 +10,7 @@
     "build": "rm -rf dist && APP_ENV=production tsc",
     "deploy": "npm run build && APP_ENV=production vercel deploy --prod",
     "start": "node dist/index.js",
+    "migrate": "ts-node src/tools/run_migration.ts",
     "migrate-passwords": "ts-node src/tools/migrate_password_hashes.ts"
   },
   "repository": "https://github.com/EtienneThompson/api.etiennethompson.com.git",

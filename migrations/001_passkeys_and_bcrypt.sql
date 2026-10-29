@@ -1,6 +1,6 @@
 -- Adds passkey (WebAuthn) support and prepares the users table for bcrypt
 -- password hashes. Run once against the login database before deploying:
---   psql "$DATABASE_URL" -f migrations/001_passkeys_and_bcrypt.sql
+--   APP_ENV=production yarn run migrate 001_passkeys_and_bcrypt.sql
 
 BEGIN;
 

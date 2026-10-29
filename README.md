@@ -39,7 +39,7 @@ Users can log into the [OAuth login service](https://github.com/EtienneThompson/
 
 Before deploying these changes:
 
-1. Run the migration: `psql "$DATABASE_URL" -f migrations/001_passkeys_and_bcrypt.sql`
+1. Run the migration: `APP_ENV=production yarn run migrate 001_passkeys_and_bcrypt.sql`
 2. Convert existing passwords to bcrypt: `APP_ENV=production yarn run migrate-passwords`
 
 Passkey settings, set as environment variables:
