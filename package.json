@@ -9,7 +9,9 @@
     "deploy-ppe": "npm run build-ppe && APP_ENV=development vercel deploy",
     "build": "rm -rf dist && APP_ENV=production tsc",
     "deploy": "npm run build && APP_ENV=production vercel deploy --prod",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "migrate": "ts-node src/tools/run_migration.ts",
+    "migrate-passwords": "ts-node src/tools/migrate_password_hashes.ts"
   },
   "repository": "https://github.com/EtienneThompson/api.etiennethompson.com.git",
   "author": "Etienne Thompson <et@etiennethompson.com>",
@@ -19,14 +21,16 @@
     "node": "24.x"
   },
   "dependencies": {
+    "@simplewebauthn/server": "^14.0.3",
     "@types/aws-sdk": "^2.7.0",
     "@types/express": "^4.17.12",
     "@types/express-fileupload": "^1.2.2",
-    "@types/node": "^15.12.4",
+    "@types/node": "^24.19.2",
     "@types/pg": "^8.6.0",
     "@types/pg-format": "^1.0.2",
     "@types/uuid": "^8.3.1",
     "aws-sdk": "^2.1062.0",
+    "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
     "dotenv": "^10.0.0",
     "eslint": "^7.29.0",
@@ -36,7 +40,7 @@
     "pg": "^8.6.0",
     "pg-format": "^1.0.4",
     "ts-node": "^10.0.0",
-    "typescript": "^4.3.4",
+    "typescript": "^5.9.3",
     "uuid": "^8.3.2"
   },
   "devDependencies": {

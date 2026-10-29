@@ -87,6 +87,11 @@ app.get("/", handler);
 app.post("/login", (req, res, next) => new RouteFactory(req).GetLoginHandler().Login());
 app.post("/login/reset/request", (req, res, next) => new RouteFactory(req).GetLoginHandler().SendResetPasswordEmail());
 app.post("/login/reset", (req, res, next) => new RouteFactory(req).GetLoginHandler().ChangePassword());
+app.post("/login/passkey/register", (req, res, next) => new RouteFactory(req).GetLoginHandler().RegisterPasskey());
+app.post("/login/passkey/options", (req, res, next) =>
+  new RouteFactory(req).GetLoginHandler().GetPasskeyLoginOptions()
+);
+app.post("/login/passkey", (req, res, next) => new RouteFactory(req).GetLoginHandler().PasskeyLogin());
 
 // Etiennethompson routes
 app.post("/etiennethompson/support", (req, res, next) =>
