@@ -4,6 +4,7 @@ import { ResponseHelper } from "../utils/response";
 import LoginHandler from "./LoginHandler";
 import aws from "aws-sdk";
 import EtienneThompsonHandler from "./EtienneThompsonHandler";
+import QrTrackerHandler from "./QrTrackerHandler";
 
 class RouteFactory {
   private req: Request;
@@ -42,6 +43,21 @@ class RouteFactory {
     const responseHelper = this.req.body.response as ResponseHelper;
 
     return new EtienneThompsonHandler(responseHelper, this.aws);
+  }
+
+  public GetQrTrackerHandler(): QrTrackerHandler {
+    if (!this.req.body.client) {
+      throw new Error("No client in the request body.");
+    }
+
+    if (!this.req.body.response) {
+      throw new Error("No response builder in the request body.");
+    }
+
+    const client = this.req.body.client as IDatabaseConnection;
+    const responseHelper = this.req.body.response as ResponseHelper;
+
+    return new QrTrackerHandler(client, responseHelper);
   }
 }
 

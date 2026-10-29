@@ -58,11 +58,13 @@ var corsOptions = {
     "http://localhost:3001",
     "http://localhost:3002",
     "http://localhost:4000",
+    "http://localhost:5173",
     "https://login.etiennethompson.com",
     "https://admin.etiennethompson.com",
     "https://inventory.etiennethompson.com",
     "https://vivtho5.dreamhosters.com",
     "https://cms.vivianethompson.com",
+    "https://qr.etiennethompson.com",
   ],
 };
 app.options("*", cors(corsOptions));
@@ -97,6 +99,15 @@ app.post("/login/passkey", (req, res, next) => new RouteFactory(req).GetLoginHan
 app.post("/etiennethompson/support", (req, res, next) =>
   new RouteFactory(req).GetEtienneThompsonHandler().SendSupportEmail()
 );
+
+// QR Tracker routes. /qr/r/:id is the public scan link encoded in each QR code.
+app.get("/qr/r/:id", (req, res, next) => new RouteFactory(req).GetQrTrackerHandler().Redirect());
+app.get("/qr/codes", (req, res, next) => new RouteFactory(req).GetQrTrackerHandler().ListCodes());
+app.post("/qr/codes", (req, res, next) => new RouteFactory(req).GetQrTrackerHandler().CreateCode());
+app.get("/qr/codes/:id", (req, res, next) => new RouteFactory(req).GetQrTrackerHandler().GetCode());
+app.patch("/qr/codes/:id", (req, res, next) => new RouteFactory(req).GetQrTrackerHandler().UpdateCode());
+app.delete("/qr/codes/:id", (req, res, next) => new RouteFactory(req).GetQrTrackerHandler().DeleteCode());
+app.get("/qr/codes/:id/visits", (req, res, next) => new RouteFactory(req).GetQrTrackerHandler().ListVisits());
 
 // Admin User routes.
 app.get("/admin/dashboard/count", dashboard.getTableCounts);

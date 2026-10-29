@@ -89,5 +89,12 @@ export const validateUser = async (req: Request, res: Response, next: NextFuncti
 };
 
 function isValidationSkippedRoute(req: Request): boolean {
-  return req.method === "OPTIONS" || req.path.includes("login") || req.path.includes("etiennethompson");
+  // Match by prefix, so ids in other routes' paths (e.g. a QR code id containing
+  // "login") can't skip validation.
+  return (
+    req.method === "OPTIONS" ||
+    req.path.startsWith("/login") ||
+    req.path.startsWith("/etiennethompson") ||
+    req.path.startsWith("/qr/r/")
+  );
 }
