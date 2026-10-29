@@ -22,7 +22,7 @@ export const performQuery = async (
 export interface QueryProps {
   name?: string;
   text: string;
-  values: (string | boolean | number)[];
+  values: (string | boolean | number | null)[];
 }
 
 export interface IDatabaseConnection {

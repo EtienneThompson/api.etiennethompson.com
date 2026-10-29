@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import { v4 as uuidv4 } from "uuid";
 import { QueryProps, DatabaseConnection } from "../../utils/database";
 import { createHourExpiration } from "../../utils/date";
+import { hashPassword } from "../../utils/password";
 import { AdminGetResponseData, DefaultValues } from "../../types";
 import { ReturnUser } from "../types";
 import {
@@ -105,6 +106,7 @@ export const createUser = async (
   const newUserId = uuidv4();
   const newClientId = uuidv4();
   let expiration = createHourExpiration();
+  const hashedPassword = await hashPassword(newElement[1].value.toString());
 
   // Construct the insert query.
   let query: QueryProps = {
@@ -113,7 +115,7 @@ export const createUser = async (
     values: [
       newUserId,
       newElement[0].value.toString(),
-      newElement[1].value.toString(),
+      hashedPassword,
       newClientId,
       expiration,
       newElement[2].value.toString(),

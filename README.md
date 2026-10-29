@@ -33,3 +33,17 @@ Every request gets it's own endpoints, usually in one of the following forms:
 1. Clone the repository.
 2. Install packages with `yarn install`
 3. Run the project with `yarn run dev`
+## Passkeys and password hashing:
+
+Users can log into the [OAuth login service](https://github.com/EtienneThompson/login.etiennethompson.com) with a passkey instead of a password. Passwords are stored as bcrypt hashes.
+
+Before deploying these changes:
+
+1. Run the migration: `psql "$DATABASE_URL" -f migrations/001_passkeys_and_bcrypt.sql`
+2. Convert existing passwords to bcrypt: `APP_ENV=production yarn run migrate-passwords`
+
+Passkey settings, set as environment variables:
+
+- `WEBAUTHN_RP_ID`: the domain passkeys are bound to. Defaults to `etiennethompson.com`. Use `localhost` for local development.
+- `WEBAUTHN_RP_NAME`: the name shown by passkey managers. Defaults to `Etienne Thompson`.
+- `WEBAUTHN_ORIGINS`: comma separated origins allowed to use passkeys. Defaults to `https://login.etiennethompson.com`. Use `http://localhost:4000` for local development.
