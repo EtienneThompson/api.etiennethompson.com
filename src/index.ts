@@ -121,6 +121,7 @@ app.get("/weddingcam/events", (req, res, next) => weddingcam(req).ListEvents());
 app.post("/weddingcam/events", (req, res, next) => weddingcam(req).CreateEvent());
 app.get("/weddingcam/events/:eventId", (req, res, next) => weddingcam(req).GetEvent());
 app.patch("/weddingcam/events/:eventId", (req, res, next) => weddingcam(req).UpdateEvent());
+app.delete("/weddingcam/events/:eventId", (req, res, next) => weddingcam(req).DeleteEvent());
 app.post("/weddingcam/events/:eventId/rotate", (req, res, next) => weddingcam(req).RotateKey());
 app.post("/weddingcam/events/:eventId/export", (req, res, next) => weddingcam(req).ExportPhotos());
 app.get("/weddingcam/events/:eventId/photos", (req, res, next) => weddingcam(req).ListEventPhotos());

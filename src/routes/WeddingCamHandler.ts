@@ -93,6 +93,10 @@ class WeddingCamHandler extends BaseRouteHandler {
     this.RunHost(this.UpdateEventInternal);
   }
 
+  public async DeleteEvent(): Promise<void> {
+    this.RunHost(this.DeleteEventInternal);
+  }
+
   public async RotateKey(): Promise<void> {
     this.RunHost(this.RotateKeyInternal);
   }
@@ -340,6 +344,29 @@ class WeddingCamHandler extends BaseRouteHandler {
       await this.Query("UPDATE qr_codes SET name=$2 WHERE codeid=$1;", [events[0].qr_codeid, joinCodeName(s.name)]);
     }
     this.Send(200, { event: await this.AdminEvent(events[0]) });
+  };
+
+  /**
+   * Permanently deletes an event: its guests and photo rows (by cascade), every photo in S3, and
+   * its QR codes, including old ones replaced by rotating. The rows go first so guests are locked
+   * out; if S3 then fails, the request rolls back and can simply be retried. Export zips are left
+   * to the bucket's lifecycle rule, which removes them within a week.
+   */
+  private DeleteEventInternal = async (): Promise<void> => {
+    const event = await this.RequireEvent();
+    const photos: { photoid: string }[] = await this.Query("SELECT photoid FROM weddingcam_photos WHERE eventid=$1;", [event.eventid]);
+    await this.Query("DELETE FROM weddingcam_events WHERE eventid=$1 AND userid=$2;", [event.eventid, this.userid]);
+    // Rotated-out codes aren't linked to the event any more, but still point at its join link.
+    const codes = await this.Query(
+      "DELETE FROM qr_codes WHERE userid=$1 AND (codeid=$2 OR target_url ~ $3) RETURNING codeid;",
+      [this.userid, event.qr_codeid, `/e/${event.eventid}(#k=[^/]*)?$`]
+    );
+    // With bucket versioning on, S3 keeps a recoverable copy for 30 days.
+    await deleteObjects(
+      photos.flatMap((p) => [objectPaths.original(event.eventid, p.photoid), objectPaths.thumb(event.eventid, p.photoid)])
+    );
+    console.log(`WeddingCam event ${event.eventid} deleted with ${photos.length} photos and ${codes.length} QR codes.`);
+    this.Send(204);
   };
 
   /**

@@ -68,6 +68,7 @@ The `/weddingcam` routes back [WeddingCam](https://github.com/EtienneThompson/We
 - `/weddingcam/guest/...` routes are public. Guests exchange the secret from an event's QR code for a random bearer token (only its hash is stored), then send it as `Authorization: Bearer <token>`.
 - `/weddingcam/events/...` routes need a user of the WeddingCam application, and only see the events that user created.
 - Each event's QR code is a QR Tracker code owned by the host who created the event. It redirects to the join link (`/e/<eventId>#k=<secret>`), so hosts can show the QR code again at any time and see its scans in WeddingCam or QR Tracker. Rotating an event's secret makes a new code and points the old one at the event without a secret.
+- Deleting an event removes its guests, photos (rows and S3 objects) and QR codes, including old ones from rotating.
 
 Before deploying:
 
