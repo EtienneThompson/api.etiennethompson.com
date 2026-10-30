@@ -41,6 +41,8 @@ const normalizeTimestamp = (value: unknown): string | null | undefined => {
 class QrTrackerHandler extends BaseRouteHandler {
   private database: IDatabaseConnection;
   private responseHelper: ResponseHelper;
+  // The signed-in user. Set by Authorized before any handler that reads or changes codes.
+  private userid: string = "";
   constructor(database: IDatabaseConnection, responseHelper: ResponseHelper) {
     super(responseHelper.req, responseHelper.next);
     this.database = database;
@@ -109,8 +111,8 @@ class QrTrackerHandler extends BaseRouteHandler {
 
   private ListCodesInternal = async (): Promise<void> => {
     const query: QueryProps = {
-      text: `SELECT ${CODE_COLUMNS} FROM qr_codes ORDER BY created_at DESC;`,
-      values: [],
+      text: `SELECT ${CODE_COLUMNS} FROM qr_codes WHERE userid=$1 ORDER BY created_at DESC;`,
+      values: [this.userid],
     };
     const codes: QrCodeEntry[] = await this.database.PerformQuery(query);
     this.responseHelper.SuccessfulResponse(SuccessfulStatusCode.Ok, codes.map(this.WithShortUrl));
@@ -126,8 +128,8 @@ class QrTrackerHandler extends BaseRouteHandler {
     // Ids are random, so retry the rare collision with a new one.
     for (let attempt = 0; attempt < 5; attempt++) {
       const query: QueryProps = {
-        text: `INSERT INTO qr_codes (codeid, name, target_url) VALUES ($1, $2, $3) ON CONFLICT (codeid) DO NOTHING RETURNING ${CODE_COLUMNS};`,
-        values: [newCodeId(), normalizeName(reqBody.name), targetUrl],
+        text: `INSERT INTO qr_codes (codeid, userid, name, target_url) VALUES ($1, $2, $3, $4) ON CONFLICT (codeid) DO NOTHING RETURNING ${CODE_COLUMNS};`,
+        values: [newCodeId(), this.userid, normalizeName(reqBody.name), targetUrl],
       };
       const codes: QrCodeEntry[] = await this.database.PerformQuery(query);
       if (codes.length > 0) {
@@ -160,8 +162,8 @@ class QrTrackerHandler extends BaseRouteHandler {
 
     // A null parameter leaves that column unchanged.
     const query: QueryProps = {
-      text: `UPDATE qr_codes SET name=COALESCE($2, name), target_url=COALESCE($3, target_url) WHERE codeid=$1 RETURNING ${CODE_COLUMNS};`,
-      values: [isValidCodeId(id) ? id : "", name, targetUrl],
+      text: `UPDATE qr_codes SET name=COALESCE($3, name), target_url=COALESCE($4, target_url) WHERE codeid=$1 AND userid=$2 RETURNING ${CODE_COLUMNS};`,
+      values: [isValidCodeId(id) ? id : "", this.userid, name, targetUrl],
     };
     const codes: QrCodeEntry[] = await this.database.PerformQuery(query);
     if (codes.length === 0) {
@@ -174,8 +176,8 @@ class QrTrackerHandler extends BaseRouteHandler {
     const id = this.responseHelper.req.params.id;
     // Its visits are removed by ON DELETE CASCADE.
     const query: QueryProps = {
-      text: "DELETE FROM qr_codes WHERE codeid=$1 RETURNING codeid;",
-      values: [isValidCodeId(id) ? id : ""],
+      text: "DELETE FROM qr_codes WHERE codeid=$1 AND userid=$2 RETURNING codeid;",
+      values: [isValidCodeId(id) ? id : "", this.userid],
     };
     const deleted = await this.database.PerformQuery(query);
     if (deleted.length === 0) {
@@ -226,6 +228,14 @@ class QrTrackerHandler extends BaseRouteHandler {
       return this.Forbidden();
     }
 
+    // validateUser already checked the client id, so this always finds the user.
+    const query: QueryProps = {
+      text: "SELECT userid FROM users WHERE clientid=$1;",
+      values: [reqBody.clientid],
+    };
+    const users: { userid: string }[] = await this.database.PerformQuery(query);
+    this.userid = users[0].userid;
+
     await handler();
   };
 
@@ -237,13 +247,14 @@ class QrTrackerHandler extends BaseRouteHandler {
     this.responseHelper.ErrorResponse(ErrorStatusCode.NotFound, "QR code not found");
   };
 
+  // Only finds the signed-in user's codes; anyone else's look like they don't exist.
   private FindCode = async (id: unknown): Promise<QrCodeEntry | undefined> => {
     if (!isValidCodeId(id)) {
       return undefined;
     }
     const query: QueryProps = {
-      text: `SELECT ${CODE_COLUMNS} FROM qr_codes WHERE codeid=$1;`,
-      values: [id],
+      text: `SELECT ${CODE_COLUMNS} FROM qr_codes WHERE codeid=$1 AND userid=$2;`,
+      values: [id, this.userid],
     };
     const codes: QrCodeEntry[] = await this.database.PerformQuery(query);
     return codes[0];
