@@ -26,6 +26,7 @@ import {
 } from "../weddingcam/helpers";
 import { processImage } from "../weddingcam/images";
 import { deleteObjects, getObject, objectPaths, putJpeg, readUrl, uploadStream } from "../weddingcam/storage";
+import { newCodeId, normalizeName, shortUrl } from "../qrtracker/codes";
 
 type Values = (string | boolean | number | null)[];
 
@@ -35,6 +36,9 @@ type Values = (string | boolean | number | null)[];
  * Guest routes (/weddingcam/guest/...) skip validateUser. Guests join by exchanging the secret
  * from the event's QR code for a random bearer token. Host routes (/weddingcam/events/...) need
  * a user of the WeddingCam application, like every other app's routes.
+ *
+ * Each event's QR code is a QR Tracker code owned by the host who made it. It redirects to the
+ * join link, so the secret isn't printed and the host can show the QR code again at any time.
  */
 class WeddingCamHandler extends BaseRouteHandler {
   private database: IDatabaseConnection;
@@ -266,7 +270,7 @@ class WeddingCamHandler extends BaseRouteHandler {
 
   private ListEventsInternal = async (): Promise<void> => {
     const events: EventEntry[] = await this.Query("SELECT * FROM weddingcam_events ORDER BY created_at DESC;", []);
-    this.Send(200, { events: events.map(adminEvent) });
+    this.Send(200, { events: await this.AdminEvents(events) });
   };
 
   private CreateEventInternal = async (): Promise<void> => {
@@ -292,15 +296,15 @@ class WeddingCamHandler extends BaseRouteHandler {
       );
       if (events.length > 0) {
         console.log(`WeddingCam event ${events[0].eventid} created.`);
-        // The key is returned exactly once. Only its hash is stored.
-        return this.Send(201, { event: adminEvent(events[0]), key });
+        const event = await this.SetJoinCode(events[0], await this.CreateJoinCode(events[0], key));
+        return this.Send(201, { event: await this.AdminEvent(event) });
       }
     }
     throw new Error("Could not allocate a unique WeddingCam event id.");
   };
 
   private GetEventInternal = async (): Promise<void> => {
-    this.Send(200, { event: adminEvent(await this.RequireEvent()) });
+    this.Send(200, { event: await this.AdminEvent(await this.RequireEvent()) });
   };
 
   private UpdateEventInternal = async (): Promise<void> => {
@@ -325,10 +329,17 @@ class WeddingCamHandler extends BaseRouteHandler {
       ]
     );
     if (events.length === 0) throw new WeddingCamError(404, "event_not_found");
-    this.Send(200, { event: adminEvent(events[0]) });
+    if (s.name && events[0].qr_codeid) {
+      await this.Query("UPDATE qr_codes SET name=$2 WHERE codeid=$1;", [events[0].qr_codeid, joinCodeName(s.name)]);
+    }
+    this.Send(200, { event: await this.AdminEvent(events[0]) });
   };
 
-  /** Issues a new QR secret. Every existing guest session stops working immediately. */
+  /**
+   * Issues a new QR secret and a new QR code. Every existing guest session stops working
+   * immediately. The old code is kept for its scan history but now opens the event without a
+   * secret, so anyone holding it (say, from a reposted photo) can no longer join.
+   */
   private RotateKeyInternal = async (): Promise<void> => {
     const eventId = eventIdParam(this.responseHelper.req.params.eventId);
     const key = newSecret();
@@ -337,8 +348,12 @@ class WeddingCamHandler extends BaseRouteHandler {
       [eventId, hashSecret(key)]
     );
     if (events.length === 0) throw new WeddingCamError(404, "event_not_found");
+    if (events[0].qr_codeid) {
+      await this.Query("UPDATE qr_codes SET target_url=$2 WHERE codeid=$1;", [events[0].qr_codeid, this.JoinUrl(eventId)]);
+    }
+    const event = await this.SetJoinCode(events[0], await this.CreateJoinCode(events[0], key));
     console.log(`WeddingCam event ${eventId} key rotated.`);
-    this.Send(200, { event: adminEvent(events[0]), key });
+    this.Send(200, { event: await this.AdminEvent(event) });
   };
 
   private ListEventPhotosInternal = async (): Promise<void> => {
@@ -538,6 +553,71 @@ class WeddingCamHandler extends BaseRouteHandler {
     };
   };
 
+  /** The signed-in host. validateUser already checked the client id, so this always finds them. */
+  private HostUserId = async (): Promise<string> => {
+    const req = this.responseHelper.req;
+    const reqBody = (req.body && req.body.clientid ? req.body : req.query) as BaseRequest;
+    const users: { userid: string }[] = await this.Query("SELECT userid FROM users WHERE clientid=$1;", [reqBody.clientid]);
+    return users[0].userid;
+  };
+
+  /**
+   * The guest join link. The secret goes in the fragment, which browsers keep across the QR
+   * Tracker redirect but never send to a server. Without a key it just asks guests to scan.
+   */
+  private JoinUrl = (eventId: string, key?: string): string => {
+    // Falls back to the admin page's origin (a CORS-allowed site) for local development.
+    const base = (process.env.WEDDINGCAM_PUBLIC_BASE_URL || this.responseHelper.req.get("origin") || "").replace(/\/+$/, "");
+    if (!/^https?:\/\/[^/]+$/.test(base)) {
+      throw new WeddingCamError(500, "not_configured", "WEDDINGCAM_PUBLIC_BASE_URL is not configured on the server.");
+    }
+    return `${base}/e/${eventId}${key ? `#k=${key}` : ""}`;
+  };
+
+  /** Creates the signed-in host's QR Tracker code for an event's join link, and returns its id. */
+  private CreateJoinCode = async (event: EventEntry, key: string): Promise<string> => {
+    const userid = await this.HostUserId();
+    // Ids are random, so retry the rare collision with a new one.
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const codes: { codeid: string }[] = await this.Query(
+        "INSERT INTO qr_codes (codeid, userid, name, target_url) VALUES ($1, $2, $3, $4) ON CONFLICT (codeid) DO NOTHING RETURNING codeid;",
+        [newCodeId(), userid, joinCodeName(event.name), this.JoinUrl(event.eventid, key)]
+      );
+      if (codes.length > 0) return codes[0].codeid;
+    }
+    throw new Error("Could not allocate a unique QR code id.");
+  };
+
+  private SetJoinCode = async (event: EventEntry, codeId: string): Promise<EventEntry> => {
+    const events: EventEntry[] = await this.Query("UPDATE weddingcam_events SET qr_codeid=$2 WHERE eventid=$1 RETURNING *;", [
+      event.eventid,
+      codeId,
+    ]);
+    return events[0];
+  };
+
+  /** Builds the host view of events, including each one's QR code link and scan count. */
+  private AdminEvents = async (events: EventEntry[]) => {
+    const codeIds = events.flatMap((e) => (e.qr_codeid ? [e.qr_codeid] : []));
+    const codes: JoinCodeEntry[] = codeIds.length
+      ? await this.Query(
+          "SELECT codeid, visit_count, last_visit_at FROM qr_codes WHERE codeid=ANY(string_to_array($1, ','));",
+          [codeIds.join(",")]
+        )
+      : [];
+    const byId = new Map(codes.map((c) => [c.codeid, c]));
+    return events.map((event) => {
+      const code = event.qr_codeid ? byId.get(event.qr_codeid) : undefined;
+      return adminEvent(event, code && {
+        url: shortUrl(this.responseHelper.req, code.codeid),
+        scans: code.visit_count,
+        lastScanAt: code.last_visit_at ? code.last_visit_at.toISOString() : null,
+      });
+    });
+  };
+
+  private AdminEvent = async (event: EventEntry) => (await this.AdminEvents([event]))[0];
+
   private FindEvent = async (eventId: string): Promise<EventEntry | undefined> => {
     const events: EventEntry[] = await this.Query("SELECT * FROM weddingcam_events WHERE eventid=$1;", [eventId]);
     return events[0];
@@ -583,6 +663,12 @@ class WeddingCamHandler extends BaseRouteHandler {
 
 type PhotoPage = { photos: PhotoEntry[]; cursor: string | null };
 
+type JoinCodeEntry = { codeid: string; visit_count: number; last_visit_at: Date | null };
+
+type JoinCode = { url: string; scans: number; lastScanAt: string | null };
+
+const joinCodeName = (eventName: string): string => normalizeName(`WeddingCam: ${eventName}`);
+
 const GUEST_COLUMNS = "guestid, eventid, secret_version, display_name, shot_count";
 
 const eventIdParam = (id: unknown): string => {
@@ -605,9 +691,11 @@ const publicEvent = (event: EventEntry) => ({
   revealAt: event.reveal_at ? event.reveal_at.toISOString() : null,
 });
 
-const adminEvent = (event: EventEntry) => ({
+const adminEvent = (event: EventEntry, qr?: JoinCode) => ({
   ...publicEvent(event),
   secretVersion: event.secret_version,
+  // The QR code to print or share. null if the event has none yet; rotating adds one.
+  qr: qr ?? null,
   moderation: event.moderation,
   maxPhotos: event.max_photos,
   createdAt: event.created_at.toISOString(),

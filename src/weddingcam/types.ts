@@ -7,6 +7,8 @@ export type EventEntry = {
   eventid: string;
   name: string;
   key_hash: string;
+  // The QR Tracker code that redirects to the join link. See WeddingCamHandler.CreateJoinCode.
+  qr_codeid: string | null;
   secret_version: number;
   uploads_open: boolean;
   gallery_open: boolean;
