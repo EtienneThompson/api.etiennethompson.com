@@ -52,11 +52,11 @@ Passkey settings, set as environment variables:
 
 ## QR Tracker:
 
-The `/qr` routes back [QR Tracker](https://github.com/EtienneThompson/QrCode). `/qr/r/<id>` is the public link encoded in each QR code: it records the scan and redirects to the code's destination. The other `/qr` routes need a user of the QR Tracker application.
+The `/qr` routes back [QR Tracker](https://github.com/EtienneThompson/QrCode). `/qr/r/<id>` is the public link encoded in each QR code: it records the scan and redirects to the code's destination. The other `/qr` routes need a user of the QR Tracker application, and only see that user's own codes.
 
 Before deploying:
 
-1. Run the migration: `APP_ENV=production yarn run migrate 002_qr_tracker.sql`
+1. Run the migrations: `APP_ENV=production yarn run migrate 002_qr_tracker.sql`, then `004_qr_tracker_owners.sql` (gives existing codes to the `etienne` user)
 2. Set the environment variables:
    - `QR_APPLICATION_ID`: QR Tracker's application id from the admin portal. Required. Requests made with any other application id are refused.
    - `QR_PUBLIC_BASE_URL`: the base URL encoded in QR codes, e.g. `https://qr.etiennethompson.com` (that site forwards `/r/<id>` to `/qr/r/<id>`). Defaults to this API's own `/qr` path. Set it before printing codes.
