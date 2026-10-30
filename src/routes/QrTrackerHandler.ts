@@ -11,7 +11,7 @@ const CODE_COLUMNS =
 
 const ID_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 
-const newCodeId = (length: number = 7): string => {
+const newCodeId = (length: number = 22): string => {
   return Array.from(randomBytes(length), (b) => ID_ALPHABET[b % ID_ALPHABET.length]).join("");
 };
 
