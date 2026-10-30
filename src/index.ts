@@ -65,6 +65,7 @@ var corsOptions = {
     "https://vivtho5.dreamhosters.com",
     "https://cms.vivianethompson.com",
     "https://qr.etiennethompson.com",
+    "https://photos.etiennethompson.com",
   ],
 };
 app.options("*", cors(corsOptions));
@@ -108,6 +109,23 @@ app.get("/qr/codes/:id", (req, res, next) => new RouteFactory(req).GetQrTrackerH
 app.patch("/qr/codes/:id", (req, res, next) => new RouteFactory(req).GetQrTrackerHandler().UpdateCode());
 app.delete("/qr/codes/:id", (req, res, next) => new RouteFactory(req).GetQrTrackerHandler().DeleteCode());
 app.get("/qr/codes/:id/visits", (req, res, next) => new RouteFactory(req).GetQrTrackerHandler().ListVisits());
+
+// WeddingCam routes. Guest routes are public: guests sign in with the event's QR secret instead.
+const weddingcam = (req: Request) => new RouteFactory(req).GetWeddingCamHandler();
+app.post("/weddingcam/guest/session", (req, res, next) => weddingcam(req).CreateSession());
+app.get("/weddingcam/guest/me", (req, res, next) => weddingcam(req).GetMe());
+app.patch("/weddingcam/guest/me", (req, res, next) => weddingcam(req).UpdateMe());
+app.get("/weddingcam/guest/photos", (req, res, next) => weddingcam(req).ListPhotos());
+app.post("/weddingcam/guest/photos", (req, res, next) => weddingcam(req).UploadPhoto());
+app.get("/weddingcam/events", (req, res, next) => weddingcam(req).ListEvents());
+app.post("/weddingcam/events", (req, res, next) => weddingcam(req).CreateEvent());
+app.get("/weddingcam/events/:eventId", (req, res, next) => weddingcam(req).GetEvent());
+app.patch("/weddingcam/events/:eventId", (req, res, next) => weddingcam(req).UpdateEvent());
+app.post("/weddingcam/events/:eventId/rotate", (req, res, next) => weddingcam(req).RotateKey());
+app.post("/weddingcam/events/:eventId/export", (req, res, next) => weddingcam(req).ExportPhotos());
+app.get("/weddingcam/events/:eventId/photos", (req, res, next) => weddingcam(req).ListEventPhotos());
+app.patch("/weddingcam/events/:eventId/photos/:photoId", (req, res, next) => weddingcam(req).UpdatePhoto());
+app.delete("/weddingcam/events/:eventId/photos/:photoId", (req, res, next) => weddingcam(req).DeletePhoto());
 
 // Admin User routes.
 app.get("/admin/dashboard/count", dashboard.getTableCounts);
