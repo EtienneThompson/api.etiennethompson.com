@@ -5,6 +5,8 @@ export const PHOTO_STATUSES: PhotoStatus[] = ["visible", "hidden", "pending"];
 
 export type EventEntry = {
   eventid: string;
+  // The host who created the event. Only they see it.
+  userid: string;
   name: string;
   key_hash: string;
   // The QR Tracker code that redirects to the join link. See WeddingCamHandler.CreateJoinCode.

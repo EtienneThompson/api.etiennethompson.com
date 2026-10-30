@@ -66,12 +66,12 @@ Before deploying:
 The `/weddingcam` routes back [WeddingCam](https://github.com/EtienneThompson/WeddingCam), a shared "disposable camera" for events. Events, guests and photo metadata are stored in Postgres, and the photos in a private S3 bucket that's only read through short-lived presigned links.
 
 - `/weddingcam/guest/...` routes are public. Guests exchange the secret from an event's QR code for a random bearer token (only its hash is stored), then send it as `Authorization: Bearer <token>`.
-- `/weddingcam/events/...` routes need a user of the WeddingCam application.
+- `/weddingcam/events/...` routes need a user of the WeddingCam application, and only see the events that user created.
 - Each event's QR code is a QR Tracker code owned by the host who created the event. It redirects to the join link (`/e/<eventId>#k=<secret>`), so hosts can show the QR code again at any time and see its scans in WeddingCam or QR Tracker. Rotating an event's secret makes a new code and points the old one at the event without a secret.
 
 Before deploying:
 
-1. Run the migrations: `APP_ENV=production yarn run migrate 003_weddingcam.sql`, then `005_weddingcam_qr_codes.sql` (after QR Tracker's migrations)
+1. Run the migrations: `APP_ENV=production yarn run migrate 003_weddingcam.sql`, then `005_weddingcam_qr_codes.sql` (after QR Tracker's migrations), then `006_weddingcam_event_owners.sql` (gives existing events to the owner of their QR code, or else the `etienne` user)
 2. Set the environment variables:
    - `WEDDINGCAM_PUBLIC_BASE_URL`: the WeddingCam site that join links open, e.g. `https://photos.etiennethompson.com`. Defaults to the origin of the admin page that made the request, which is enough for local development.
    - `WEDDINGCAM_APPLICATION_ID`: WeddingCam's application id from the admin portal. Required. Requests made with any other application id are refused.

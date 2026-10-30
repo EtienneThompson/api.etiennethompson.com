@@ -35,7 +35,8 @@ type Values = (string | boolean | number | null)[];
  *
  * Guest routes (/weddingcam/guest/...) skip validateUser. Guests join by exchanging the secret
  * from the event's QR code for a random bearer token. Host routes (/weddingcam/events/...) need
- * a user of the WeddingCam application, like every other app's routes.
+ * a user of the WeddingCam application, like every other app's routes, and only see the events
+ * that user created.
  *
  * Each event's QR code is a QR Tracker code owned by the host who made it. It redirects to the
  * join link, so the secret isn't printed and the host can show the QR code again at any time.
@@ -45,6 +46,8 @@ class WeddingCamHandler extends BaseRouteHandler {
   private responseHelper: ResponseHelper;
   // Set once a rate-limit hit is recorded, so a request that then fails still counts.
   private hasSavepoint: boolean;
+  // The signed-in host. Set by RunHost before any host route runs.
+  private userid: string = "";
   constructor(database: IDatabaseConnection, responseHelper: ResponseHelper) {
     super(responseHelper.req, responseHelper.next);
     this.database = database;
@@ -269,7 +272,9 @@ class WeddingCamHandler extends BaseRouteHandler {
   };
 
   private ListEventsInternal = async (): Promise<void> => {
-    const events: EventEntry[] = await this.Query("SELECT * FROM weddingcam_events ORDER BY created_at DESC;", []);
+    const events: EventEntry[] = await this.Query("SELECT * FROM weddingcam_events WHERE userid=$1 ORDER BY created_at DESC;", [
+      this.userid,
+    ]);
     this.Send(200, { events: await this.AdminEvents(events) });
   };
 
@@ -281,9 +286,10 @@ class WeddingCamHandler extends BaseRouteHandler {
     // Ids are random, so retry the rare collision with a new one.
     for (let attempt = 0; attempt < 5; attempt++) {
       const events: EventEntry[] = await this.Query(
-        "INSERT INTO weddingcam_events (eventid, name, key_hash, uploads_open, gallery_open, shot_limit, moderation, reveal_at, max_photos) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) ON CONFLICT (eventid) DO NOTHING RETURNING *;",
+        "INSERT INTO weddingcam_events (eventid, userid, name, key_hash, uploads_open, gallery_open, shot_limit, moderation, reveal_at, max_photos) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) ON CONFLICT (eventid) DO NOTHING RETURNING *;",
         [
           newEventId(),
+          this.userid,
           settings.name,
           hashSecret(key),
           settings.uploadsOpen ?? true,
@@ -312,12 +318,13 @@ class WeddingCamHandler extends BaseRouteHandler {
     const s = parseSettings(this.responseHelper.req.body);
     // A null parameter leaves that column unchanged. revealAt can be cleared, so it has a flag.
     const events: EventEntry[] = await this.Query(
-      `UPDATE weddingcam_events SET name=COALESCE($2, name), uploads_open=COALESCE($3, uploads_open), gallery_open=COALESCE($4, gallery_open),
-        shot_limit=COALESCE($5, shot_limit), max_photos=COALESCE($6, max_photos), moderation=COALESCE($7, moderation),
-        reveal_at=CASE WHEN $8 THEN $9::timestamptz ELSE reveal_at END
-       WHERE eventid=$1 RETURNING *;`,
+      `UPDATE weddingcam_events SET name=COALESCE($3, name), uploads_open=COALESCE($4, uploads_open), gallery_open=COALESCE($5, gallery_open),
+        shot_limit=COALESCE($6, shot_limit), max_photos=COALESCE($7, max_photos), moderation=COALESCE($8, moderation),
+        reveal_at=CASE WHEN $9 THEN $10::timestamptz ELSE reveal_at END
+       WHERE eventid=$1 AND userid=$2 RETURNING *;`,
       [
         eventId,
+        this.userid,
         s.name ?? null,
         s.uploadsOpen ?? null,
         s.galleryOpen ?? null,
@@ -344,8 +351,8 @@ class WeddingCamHandler extends BaseRouteHandler {
     const eventId = eventIdParam(this.responseHelper.req.params.eventId);
     const key = newSecret();
     const events: EventEntry[] = await this.Query(
-      "UPDATE weddingcam_events SET key_hash=$2, secret_version=secret_version+1 WHERE eventid=$1 RETURNING *;",
-      [eventId, hashSecret(key)]
+      "UPDATE weddingcam_events SET key_hash=$3, secret_version=secret_version+1 WHERE eventid=$1 AND userid=$2 RETURNING *;",
+      [eventId, this.userid, hashSecret(key)]
     );
     if (events.length === 0) throw new WeddingCamError(404, "event_not_found");
     if (events[0].qr_codeid) {
@@ -358,7 +365,7 @@ class WeddingCamHandler extends BaseRouteHandler {
 
   private ListEventPhotosInternal = async (): Promise<void> => {
     const req = this.responseHelper.req;
-    const eventId = eventIdParam(req.params.eventId);
+    const { eventid: eventId } = await this.RequireEvent();
     const status = req.query.status;
     if (status !== undefined && !PHOTO_STATUSES.includes(status as PhotoStatus)) {
       throw new WeddingCamError(400, "invalid_status");
@@ -374,9 +381,10 @@ class WeddingCamHandler extends BaseRouteHandler {
     const req = this.responseHelper.req;
     const status = (req.body as { status?: unknown }).status;
     if (!PHOTO_STATUSES.includes(status as PhotoStatus)) throw new WeddingCamError(400, "invalid_status");
+    const event = await this.RequireEvent();
     const photos: PhotoEntry[] = await this.Query(
       "UPDATE weddingcam_photos SET status=$3 WHERE eventid=$1 AND photoid=$2 RETURNING *;",
-      [eventIdParam(req.params.eventId), photoIdParam(req.params.photoId), status as PhotoStatus]
+      [event.eventid, photoIdParam(req.params.photoId), status as PhotoStatus]
     );
     if (photos.length === 0) throw new WeddingCamError(404, "photo_not_found");
     this.Send(200, { photo: await toApiPhoto(photos[0], { includeStatus: true }) });
@@ -384,7 +392,7 @@ class WeddingCamHandler extends BaseRouteHandler {
 
   private DeletePhotoInternal = async (): Promise<void> => {
     const req = this.responseHelper.req;
-    const eventId = eventIdParam(req.params.eventId);
+    const { eventid: eventId } = await this.RequireEvent();
     const photo = await this.FindPhoto(eventId, photoIdParam(req.params.photoId));
     if (!photo) throw new WeddingCamError(404, "photo_not_found");
     // With bucket versioning on, S3 keeps a recoverable copy.
@@ -466,6 +474,7 @@ class WeddingCamHandler extends BaseRouteHandler {
       if (reqBody.appid !== appid || req.body.isMock !== false) {
         throw new WeddingCamError(403, "forbidden", "You don't have access to WeddingCam.");
       }
+      this.userid = await this.HostUserId();
       await handler();
     };
     return this.HandleRequest(this.Catch(authorized), this.Catch(authorized));
@@ -576,12 +585,11 @@ class WeddingCamHandler extends BaseRouteHandler {
 
   /** Creates the signed-in host's QR Tracker code for an event's join link, and returns its id. */
   private CreateJoinCode = async (event: EventEntry, key: string): Promise<string> => {
-    const userid = await this.HostUserId();
     // Ids are random, so retry the rare collision with a new one.
     for (let attempt = 0; attempt < 5; attempt++) {
       const codes: { codeid: string }[] = await this.Query(
         "INSERT INTO qr_codes (codeid, userid, name, target_url) VALUES ($1, $2, $3, $4) ON CONFLICT (codeid) DO NOTHING RETURNING codeid;",
-        [newCodeId(), userid, joinCodeName(event.name), this.JoinUrl(event.eventid, key)]
+        [newCodeId(), this.userid, joinCodeName(event.name), this.JoinUrl(event.eventid, key)]
       );
       if (codes.length > 0) return codes[0].codeid;
     }
@@ -623,8 +631,13 @@ class WeddingCamHandler extends BaseRouteHandler {
     return events[0];
   };
 
+  /** The host route's event. Other hosts' events look like they don't exist. */
   private RequireEvent = async (): Promise<EventEntry> => {
-    const event = await this.FindEvent(eventIdParam(this.responseHelper.req.params.eventId));
+    const events: EventEntry[] = await this.Query("SELECT * FROM weddingcam_events WHERE eventid=$1 AND userid=$2;", [
+      eventIdParam(this.responseHelper.req.params.eventId),
+      this.userid,
+    ]);
+    const event = events[0];
     if (!event) throw new WeddingCamError(404, "event_not_found");
     return event;
   };
