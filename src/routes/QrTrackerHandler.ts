@@ -1,21 +1,13 @@
-import { randomBytes } from "crypto";
 import { IDatabaseConnection, QueryProps } from "../utils/database";
 import { ErrorStatusCode, HttpStatusCode, ResponseHelper, SuccessfulStatusCode } from "../utils/response";
 import BaseRouteHandler from "./BaseRouteHandler";
 import { BaseRequest } from "../types";
 import { CreateQrCodeRequest, QrCode, QrCodeEntry, QrVisit, UpdateQrCodeRequest } from "../qrtracker/types";
+import { isValidCodeId, newCodeId, normalizeName, shortUrl } from "../qrtracker/codes";
 
 // Columns returned for a QR code, named the way the web app expects them.
 const CODE_COLUMNS =
   'codeid AS id, name, target_url AS "targetUrl", created_at AS "createdAt", visit_count AS "visitCount", last_visit_at AS "lastVisitAt"';
-
-const ID_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-
-const newCodeId = (length: number = 22): string => {
-  return Array.from(randomBytes(length), (b) => ID_ALPHABET[b % ID_ALPHABET.length]).join("");
-};
-
-const isValidCodeId = (id: unknown): id is string => typeof id === "string" && /^[0-9A-Za-z]{1,32}$/.test(id);
 
 // Returns the url if it's a valid http(s) url, otherwise null.
 const normalizeUrl = (value: unknown): string | null => {
@@ -26,8 +18,6 @@ const normalizeUrl = (value: unknown): string | null => {
     return null;
   }
 };
-
-const normalizeName = (value: unknown): string => String(value ?? "").trim().slice(0, 200);
 
 // Returns null for a missing value and undefined for an invalid one.
 const normalizeTimestamp = (value: unknown): string | null | undefined => {
@@ -260,16 +250,8 @@ class QrTrackerHandler extends BaseRouteHandler {
     return codes[0];
   };
 
-  /**
-   * Add the link encoded in the QR code. It's QR_PUBLIC_BASE_URL (e.g. a website
-   * that forwards /r/<id> here), or this API's own /qr/r/<id> route.
-   */
-  private WithShortUrl = (code: QrCodeEntry): QrCode => {
-    const req = this.responseHelper.req;
-    const proto = (req.get("x-forwarded-proto") ?? req.protocol).split(",")[0];
-    const base = process.env.QR_PUBLIC_BASE_URL?.replace(/\/+$/, "") || `${proto}://${req.get("host")}/qr`;
-    return { ...code, shortUrl: `${base}/r/${code.id}` };
-  };
+  // Add the link encoded in the QR code.
+  private WithShortUrl = (code: QrCodeEntry): QrCode => ({ ...code, shortUrl: shortUrl(this.responseHelper.req, code.id) });
 }
 
 export default QrTrackerHandler;
