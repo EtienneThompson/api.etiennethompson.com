@@ -1,4 +1,4 @@
-import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { DeleteObjectsCommand, GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { Upload } from "@aws-sdk/lib-storage";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { Readable } from "stream";
@@ -51,8 +51,13 @@ export const getObject = async (key: string): Promise<Buffer> => {
   return Buffer.from(await res.Body!.transformToByteArray());
 };
 
+/** Deletes objects in batches of up to 1000, the most one S3 request can take. */
 export const deleteObjects = async (keys: string[]): Promise<void> => {
-  await Promise.all(keys.map((key) => s3().send(new DeleteObjectCommand({ Bucket: bucket(), Key: key }))));
+  for (let i = 0; i < keys.length; i += 1000) {
+    const batch = keys.slice(i, i + 1000).map((Key) => ({ Key }));
+    const res = await s3().send(new DeleteObjectsCommand({ Bucket: bucket(), Delete: { Objects: batch, Quiet: true } }));
+    if (res.Errors?.length) throw new Error(`Could not delete ${res.Errors.length} objects: ${res.Errors[0].Message}`);
+  }
 };
 
 /** Streams a body of unknown length (e.g. a zip being built) into one object. */
