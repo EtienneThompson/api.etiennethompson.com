@@ -95,6 +95,7 @@ function isValidationSkippedRoute(req: Request): boolean {
     req.method === "OPTIONS" ||
     req.path.startsWith("/login") ||
     req.path.startsWith("/etiennethompson") ||
-    req.path.startsWith("/qr/r/")
+    req.path.startsWith("/qr/r/") ||
+    req.path.startsWith("/weddingcam/guest/")
   );
 }
